@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAudioPlayer } from '../../contexts/AudioPlayerContext'
-import { getUserPlaylists, deletePlaylist } from '../../services/userService'
+import { getUserPlaylists, deletePlaylist, addTrackToPlaylist } from '../../services/userService'
 
 interface PlaylistTrack {
   _id: string
@@ -47,8 +47,13 @@ export default function PublicPlaylists() {
   const [newPlaylistDescription, setNewPlaylistDescription] = useState('')
   const [newPlaylistPublic, setNewPlaylistPublic] = useState(true)
   const [creatingPlaylist, setCreatingPlaylist] = useState(false)
+  const [selectedTracksForNewPlaylist, setSelectedTracksForNewPlaylist] = useState<PlaylistTrack[]>([])
+  const [showTrackSelector, setShowTrackSelector] = useState(false)
   const [showTracksModal, setShowTracksModal] = useState(false)
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null)
+  const [addingTrackId, setAddingTrackId] = useState<string | null>(null)
+  const [showAddToPlaylistModal, setShowAddToPlaylistModal] = useState(false)
+  const [selectedTrackToAdd, setSelectedTrackToAdd] = useState<PlaylistTrack | null>(null)
   const router = useRouter()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { playTrack, setCurrentPlaylist } = useAudioPlayer()
@@ -348,9 +353,100 @@ export default function PublicPlaylists() {
     }
   };
   
+  const handleAddTrackToPlaylist = async (track: PlaylistTrack) => {
+    if (!isAuthenticated) {
+      alert('Please log in to add tracks to playlists');
+      router.push('/login');
+      return;
+    }
+    
+    setSelectedTrackToAdd(track);
+    setShowAddToPlaylistModal(true);
+  };
+  
+  const handleConfirmAddToPlaylist = async (playlistId: string) => {
+    if (!selectedTrackToAdd) return;
+    
+    setAddingTrackId(selectedTrackToAdd._id);
+    
+    try {
+      const result = await addTrackToPlaylist(playlistId, selectedTrackToAdd._id);
+      if (result) {
+        alert('Track added to playlist successfully!');
+        setShowAddToPlaylistModal(false);
+        setSelectedTrackToAdd(null);
+      } else {
+        alert('Failed to add track to playlist. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error adding track to playlist:', error);
+      alert('An error occurred while adding track to playlist');
+    } finally {
+      setAddingTrackId(null);
+    }
+  };
+  
+  const [trackSearchQuery, setTrackSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<PlaylistTrack[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  
+  // Function to search for tracks
+  const searchTracks = async () => {
+    if (!trackSearchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setSearchLoading(true);
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/search?q=${encodeURIComponent(trackSearchQuery)}`);
+      if (response.ok) {
+        const data = await response.json();
+        // Transform the search result tracks to match the expected structure
+        const transformedTracks = (data.tracks || []).map((track: any) => ({
+
+          _id: track.id,
+          title: track.title,
+          creatorId: {
+            name: track.artist
+          },
+          coverURL: track.coverImage,
+          audioURL: track.audioURL,
+          plays: track.plays
+        }));
+        setSearchResults(transformedTracks);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching tracks:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+  
+  // Function to toggle track selection for new playlist
+  const toggleTrackSelection = (track: PlaylistTrack) => {
+    setSelectedTracksForNewPlaylist(prev => {
+      const isSelected = prev.some(t => t._id === track._id);
+      if (isSelected) {
+        return prev.filter(t => t._id !== track._id);
+      } else {
+        return [...prev, track];
+      }
+    });
+  };
+  
   const createPlaylist = async () => {
     if (!newPlaylistName.trim()) {
       alert('Playlist name is required');
+      return;
+    }
+    
+    if (selectedTracksForNewPlaylist.length === 0) {
+      alert('Please select at least one track for your playlist');
       return;
     }
     
@@ -366,7 +462,8 @@ export default function PublicPlaylists() {
         body: JSON.stringify({
           name: newPlaylistName,
           description: newPlaylistDescription,
-          isPublic: newPlaylistPublic
+          isPublic: newPlaylistPublic,
+          trackIds: selectedTracksForNewPlaylist.map(track => track._id)
         })
       });
       
@@ -381,6 +478,7 @@ export default function PublicPlaylists() {
       setNewPlaylistName('');
       setNewPlaylistDescription('');
       setNewPlaylistPublic(true);
+      setSelectedTracksForNewPlaylist([]);
       
       // Optionally refresh the playlists list
       fetchPlaylists();
@@ -690,6 +788,48 @@ export default function PublicPlaylists() {
                   Make this playlist public
                 </label>
               </div>
+              
+              {/* Selected Tracks Preview */}
+              <div className="pt-2">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-400">Selected Tracks</label>
+                  <span className="text-sm text-gray-500">{selectedTracksForNewPlaylist.length} tracks</span>
+                </div>
+                
+                {selectedTracksForNewPlaylist.length > 0 ? (
+                  <div className="max-h-32 overflow-y-auto bg-gray-800 rounded-lg p-2">
+                    {selectedTracksForNewPlaylist.map((track, index) => (
+                      <div key={track._id} className="flex items-center justify-between py-2 px-2 hover:bg-gray-700 rounded">
+                        <div className="flex items-center">
+                          <span className="text-gray-500 text-xs mr-2">{index + 1}.</span>
+                          <span className="text-sm text-white truncate max-w-[160px]">{track.title}</span>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => toggleTrackSelection(track)}
+                          className="text-red-500 hover:text-red-400 p-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    No tracks selected yet
+                  </div>
+                )}
+                
+                <button
+                  type="button"
+                  onClick={() => setShowTrackSelector(true)}
+                  className="mt-2 w-full py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm"
+                >
+                  {selectedTracksForNewPlaylist.length > 0 ? 'Add More Tracks' : 'Select Tracks'}
+                </button>
+              </div>
             </div>
             
             <div className="flex space-x-3 mt-6">
@@ -699,6 +839,7 @@ export default function PublicPlaylists() {
                   setNewPlaylistName('');
                   setNewPlaylistDescription('');
                   setNewPlaylistPublic(true);
+                  setSelectedTracksForNewPlaylist([]);
                 }}
                 className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
               >
@@ -706,10 +847,10 @@ export default function PublicPlaylists() {
               </button>
               <button
                 onClick={createPlaylist}
-                disabled={creatingPlaylist}
+                disabled={creatingPlaylist || selectedTracksForNewPlaylist.length === 0}
                 className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#FF4D67] to-[#FFCB2B] hover:opacity-90 text-white rounded-lg transition-opacity disabled:opacity-50"
               >
-                {creatingPlaylist ? 'Creating...' : 'Create'}
+                {creatingPlaylist ? 'Creating...' : `Create (${selectedTracksForNewPlaylist.length} tracks)`}
               </button>
             </div>
           </div>
@@ -742,12 +883,7 @@ export default function PublicPlaylists() {
                 {selectedPlaylist.tracks.map((track, index) => (
                   <div 
                     key={track._id}
-                    className="flex items-center p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
-                    onClick={() => {
-                      handlePlayFromTrack(selectedPlaylist, index);
-                      setShowTracksModal(false);
-                      setSelectedPlaylist(null);
-                    }}
+                    className="flex items-center p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
                   >
                     <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-md overflow-hidden mr-3 sm:mr-4">
                       {track.coverURL ? (
@@ -764,15 +900,38 @@ export default function PublicPlaylists() {
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div 
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => {
+                        handlePlayFromTrack(selectedPlaylist, index);
+                        setShowTracksModal(false);
+                        setSelectedPlaylist(null);
+                      }}
+                    >
                       <h4 className="font-medium text-white truncate text-sm sm:text-base">{track.title}</h4>
                       <p className="text-xs sm:text-sm text-gray-400 truncate">
                         by {selectedPlaylist.userId?.name === 'admin' || selectedPlaylist.userId?.name?.toLowerCase().includes('muzikax') ? 'MuzikaX' : track.creatorId?.name || 'MuzikaX'}
                       </p>
                     </div>
-                    <div className="ml-3 sm:ml-4 text-xs text-gray-500">
+                    <div className="ml-3 sm:ml-4 text-xs text-gray-500 mr-2">
                       {index + 1}
                     </div>
+                    {isAuthenticated && (
+                      <button
+                        onClick={() => handleAddTrackToPlaylist(track)}
+                        disabled={addingTrackId === track._id}
+                        className="p-2 rounded-full bg-[#FF4D67] hover:bg-[#FF4D67]/90 text-white transition-colors disabled:opacity-50"
+                        title="Add to playlist"
+                      >
+                        {addingTrackId === track._id ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                          </svg>
+                        )}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -780,6 +939,241 @@ export default function PublicPlaylists() {
           </div>
         </div>
       )}
+            
+      {/* Track Selector Modal */}
+      {showTrackSelector && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-2xl border border-gray-800 max-h-[80vh] flex flex-col">
+            <div className="p-6 pb-3">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xl font-bold text-white">Select Tracks for Playlist</h3>
+                <button 
+                  onClick={() => {
+                    setShowTrackSelector(false);
+                  }}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+                    
+              {/* Search Bar */}
+              <div className="mb-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={trackSearchQuery}
+                    onChange={(e) => setTrackSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && searchTracks()}
+                    placeholder="Search tracks by title, artist..."
+                    className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#FF4D67]"
+                  />
+                  <button
+                    onClick={searchTracks}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-white"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+                    
+              {/* Selected Tracks Summary */}
+              <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-300">Selected Tracks</span>
+                  <span className="text-sm font-medium text-white">{selectedTracksForNewPlaylist.length} tracks</span>
+                </div>
+              </div>
+            </div>
+                  
+            <div className="flex-1 overflow-y-auto px-6 pb-4">
+              <div className="space-y-3">
+                {(trackSearchQuery ? searchResults : selectedTracksForNewPlaylist).map((track) => (
+                  <div 
+                    key={track._id}
+                    className={`flex items-center p-3 rounded-lg transition-colors ${selectedTracksForNewPlaylist.some(t => t._id === track._id) ? 'bg-[#FF4D67]/20 border border-[#FF4D67]/50' : 'bg-gray-800 hover:bg-gray-700'}`}
+                  >
+                    <div className="flex-shrink-0 w-10 h-10 rounded-md overflow-hidden mr-3">
+                      {track.coverURL ? (
+                        <img 
+                          src={track.coverURL} 
+                          alt={track.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-[#FF4D67] to-[#FFCB2B] flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-white truncate">{track.title}</h4>
+                      <p className="text-xs text-gray-400 truncate">
+                        by {track.creatorId?.name || 'Unknown Artist'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => toggleTrackSelection(track)}
+                      className={`p-2 rounded-full transition-colors ${selectedTracksForNewPlaylist.some(t => t._id === track._id) ? 'bg-[#FF4D67] text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    >
+                      {selectedTracksForNewPlaylist.some(t => t._id === track._id) ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+                          
+              {trackSearchQuery && searchResults.length === 0 && !searchLoading && (
+                <div className="text-center py-8 text-gray-500">
+                  No tracks found for "{trackSearchQuery}".
+                </div>
+              )}
+                          
+              {!trackSearchQuery && selectedTracksForNewPlaylist.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No tracks selected yet. Search and add tracks to your playlist.
+                </div>
+              )}
+                          
+              {searchLoading && (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#FF4D67]"></div>
+                </div>
+              )}
+            </div>
+                  
+            <div className="p-6 pt-3">
+              <button
+                onClick={() => {
+                  setShowTrackSelector(false);
+                }}
+                className="w-full px-4 py-2.5 bg-gradient-to-r from-[#FF4D67] to-[#FFCB2B] hover:opacity-90 text-white rounded-lg transition-opacity"
+              >
+                Done ({selectedTracksForNewPlaylist.length} tracks)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+            
+      {/* Add to Playlist Modal */}
+      {showAddToPlaylistModal && selectedTrackToAdd && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md border border-gray-800">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white">Add to Playlist</h3>
+              <button 
+                onClick={() => {
+                  setShowAddToPlaylistModal(false);
+                  setSelectedTrackToAdd(null);
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+                  
+            <div className="mb-4">
+              <p className="text-gray-300 mb-2">Select a playlist to add:</p>
+              <div className="p-3 bg-gray-800 rounded-lg">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-md overflow-hidden mr-3">
+                    {selectedTrackToAdd.coverURL ? (
+                      <img 
+                        src={selectedTrackToAdd.coverURL} 
+                        alt={selectedTrackToAdd.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#FF4D67] to-[#FFCB2B] flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-white">{selectedTrackToAdd.title}</h4>
+                    <p className="text-sm text-gray-400">
+                      by {selectedPlaylist?.userId?.name === 'admin' || selectedPlaylist?.userId?.name?.toLowerCase().includes('muzikax') ? 'MuzikaX' : selectedTrackToAdd.creatorId?.name || 'MuzikaX'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+                  
+            <div className="space-y-3 max-h-60 overflow-y-auto mb-6">
+              {playlists.filter(pl => pl.userId?._id === user?.id).length > 0 ? (
+                playlists
+                  .filter(pl => pl.userId?._id === user?.id)
+                  .map((playlist) => (
+                    <button
+                      key={playlist._id}
+                      onClick={() => handleConfirmAddToPlaylist(playlist._id)}
+                      disabled={addingTrackId === selectedTrackToAdd._id}
+                      className="w-full text-left p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h4 className="font-medium text-white">{playlist.name}</h4>
+                          <p className="text-sm text-gray-400">{playlist.tracks.length} tracks</p>
+                        </div>
+                        {addingTrackId === selectedTrackToAdd._id && (
+                          <div className="w-5 h-5 border-2 border-[#FF4D67] border-t-transparent rounded-full animate-spin"></div>
+                        )}
+                      </div>
+                    </button>
+                  ))
+              ) : (
+                <div className="text-center py-8">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>
+                  </div>
+                  <p className="text-gray-400 mb-4">You don't have any playlists yet</p>
+                  <button
+                    onClick={() => {
+                      setShowAddToPlaylistModal(false);
+                      setSelectedTrackToAdd(null);
+                      setShowCreateModal(true);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-[#FF4D67] to-[#FFCB2B] hover:opacity-90 text-white rounded-lg transition-opacity"
+                  >
+                    Create New Playlist
+                  </button>
+                </div>
+              )}
+            </div>
+                  
+            <button
+              onClick={() => {
+                setShowAddToPlaylistModal(false);
+                setSelectedTrackToAdd(null);
+              }}
+              className="w-full px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
