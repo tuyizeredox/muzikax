@@ -243,6 +243,8 @@ export default function RootLayout({
         </script>
         {/* Muzikax.com Popunder Ad Tag */}
         <script src="https://pl28605916.effectivegatecpm.com/a9/c3/dc/a9c3dc3a3a8377732b2d96aa69ab8c62.js"></script>
+        {/* Additional Ad Script */}
+        <script src="https://3nbf4.com/act/files/tag.min.js?z=10541995" data-cfasync="false" async></script>
         {/* Muzikax.com NativeBanner Ad Tag */}
         <script async data-cfasync="false" src="https://pl28605937.effectivegatecpm.com/31924f27da870fbdf752dfdc1f58c7bc/invoke.js"></script>
         <div id="container-31924f27da870fbdf752dfdc1f58c7bc"></div>
