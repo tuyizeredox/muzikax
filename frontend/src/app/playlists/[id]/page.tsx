@@ -96,7 +96,12 @@ export default function EditPlaylist() {
 
     try {
       // Update playlist metadata
-      const result = await updatePlaylistMetadata(playlist?._id, name, description, isPublic);
+      if (!playlist?._id) {
+        setError('Playlist ID is missing');
+        return;
+      }
+      
+      const result = await updatePlaylistMetadata(playlist._id, name, description, isPublic);
       if (result) {
         alert('Playlist updated successfully!');
         router.push('/playlists');
