@@ -247,7 +247,7 @@ export default function RootLayout({
         <script async data-cfasync="false" src="https://pl28605937.effectivegatecpm.com/31924f27da870fbdf752dfdc1f58c7bc/invoke.js"></script>
         <div id="container-31924f27da870fbdf752dfdc1f58c7bc"></div>
       </head>
-      <body className="pb-24 md:pb-0">
+      <body className="pb-20 md:pb-0">
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"}>
           <AuthProvider>
             <AudioPlayerProvider>

@@ -301,7 +301,7 @@ body {
 
 @media (max-width: 767px) {
   .mobile-navbar-height {
-    height: calc(60px + env(safe-area-inset-bottom));
+    height: calc(50px + env(safe-area-inset-bottom));
   }
   
   /* Ensure mobile navbar is visible above all content */
