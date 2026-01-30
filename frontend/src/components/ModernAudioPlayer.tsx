@@ -282,8 +282,8 @@ const ModernAudioPlayer = () => {
         <div className={`
           fixed bottom-20 sm:bottom-6 right-2 sm:right-6 
           left-2 sm:left-auto
-          w-[calc(100vw-1rem)] sm:w-[${isBeat ? '380px' : '340px'}] 
-          max-w-[380px]
+          w-[calc(100vw-1rem)] sm:w-[${isBeat ? '420px' : '380px'}] 
+          max-w-[420px]
           rounded-2xl 
           ${isBeat ? 'bg-gradient-to-br from-gray-900 to-black backdrop-blur-xl border border-[#FF4D67]/30 shadow-2xl shadow-[#FF4D67]/20' : 'bg-black/70 backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.6)]'} 
           z-40 animate-[fadeInUp_0.3s_ease-out]
@@ -368,13 +368,14 @@ const ModernAudioPlayer = () => {
               <button
                 onClick={togglePlayPause}
                 className="
-                  w-8 h-8 sm:w-10 sm:h-10 rounded-full 
+                  w-10 h-10 sm:w-12 sm:h-12 rounded-full 
                   bg-white/10 hover:bg-white/20 
                   flex items-center justify-center
                   transition-all
-                  min-w-[44px] min-h-[44px]
+                  min-w-[48px] min-h-[48px]
                   touch-manipulation
-                  -ml-1
+                  p-1
+                  -ml-0.5
                 "
               >
                 {isPlaying ? (
@@ -395,13 +396,13 @@ const ModernAudioPlayer = () => {
               <button
                 onClick={shufflePlaylist}
                 className="
-                  w-7 h-7 rounded-full
+                  w-9 h-9 rounded-full
                   bg-white/5 hover:bg-white/15
                   flex items-center justify-center
                   transition
-                  min-w-[44px] min-h-[44px]
+                  min-w-[48px] min-h-[48px]
                   touch-manipulation
-                  -ml-0.5
+                  p-1
                 "
                 title="Shuffle playlist"
               >
@@ -414,13 +415,14 @@ const ModernAudioPlayer = () => {
               <button
                 onClick={goToFullPlayer}
                 className="
-                  w-8 h-8 sm:w-9 sm:h-9 rounded-full
+                  w-10 h-10 sm:w-11 sm:h-11 rounded-full
                   bg-white/5 hover:bg-white/15
                   flex items-center justify-center
                   transition
-                  min-w-[44px] min-h-[44px]
+                  min-w-[48px] min-h-[48px]
                   touch-manipulation
-                  -ml-0.5
+                  p-1
+                  ml-0.5
                 "
                 title="Open full player"
               >
@@ -450,14 +452,14 @@ const ModernAudioPlayer = () => {
               <button
                 onClick={toggleLoop}
                 className={`
-                  w-7 h-7 rounded-full
+                  w-9 h-9 rounded-full
                   flex items-center justify-center
                   ${isLooping ? 'text-[#FF4D67]' : 'text-gray-400'} hover:text-white
                   hover:bg-white/10
                   transition
-                  min-w-[44px] min-h-[44px]
+                  min-w-[48px] min-h-[48px]
                   touch-manipulation
-                  -ml-0.5
+                  p-1
                 `}
                 title="Loop track/playlist"
               >
@@ -470,14 +472,14 @@ const ModernAudioPlayer = () => {
               <div className="group relative">
                 <button 
                   className="
-                    w-7 h-7 rounded-full
+                    w-9 h-9 rounded-full
                     flex items-center justify-center
                     text-gray-400 hover:text-white
                     hover:bg-white/10
                     transition
-                    min-w-[44px] min-h-[44px]
+                    min-w-[48px] min-h-[48px]
                     touch-manipulation
-                    -ml-0.5
+                    p-1
                   "
                   title="Adjust volume"
                 >
@@ -509,16 +511,16 @@ const ModernAudioPlayer = () => {
               <button
                 onClick={toggleFavorite}
                 className={`
-                  w-7 h-7 rounded-full
+                  w-9 h-9 rounded-full
                   flex items-center justify-center
                   transition-colors ${
                     isFavorite 
                       ? 'text-red-400 bg-red-500/20 border border-red-500/30' 
                       : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                   }
-                  min-w-[44px] min-h-[44px]
+                  min-w-[48px] min-h-[48px]
                   touch-manipulation
-                  -ml-0.5
+                  p-1
                 `}
                 title={isFavorite ? "Remove from favorites" : "Save track"}
               >
