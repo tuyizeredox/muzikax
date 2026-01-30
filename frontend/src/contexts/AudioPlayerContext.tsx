@@ -91,6 +91,7 @@ interface AudioPlayerContextType {
   setPlaybackRate: (rate: number) => void;
   shareTrack: (platform: string) => void;
   downloadTrack: () => void; // Add downloadTrack function
+  markRedirectCompleted: () => void; // Add function to mark redirect as completed
   clearAllFavorites: () => void; // Add function to clear all favorites
   // Music visualization properties
   audioAnalyser: AnalyserNode | null;
@@ -125,6 +126,14 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
   const [queue, setQueue] = useState<Track[]>([]); // Queue for upcoming tracks
   const [currentPlaylistName, setCurrentPlaylistName] = useState<string>(''); // Name of the current playlist being played
   const [hasReachedTimeLimit, setHasReachedTimeLimit] = useState<boolean>(false); // State to track if time limit has been reached for paid beats
+  
+  // Initialize redirect status on context creation
+  useEffect(() => {
+    // Update last active time
+    const currentTime = Date.now();
+    localStorage.setItem('last_active_time', currentTime.toString());
+  }, []);
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hasIncrementedPlayCount = useRef<Set<string>>(new Set());
   const router = useRouter();
@@ -282,6 +291,9 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
   }, [currentTrack, isMinimized, router]);
 
   const playTrack = (track: Track, contextPlaylist?: Track[], albumContext?: { albumId: string, tracks: Track[] }, isCycling: boolean = false) => {
+    // Open the external redirect link in a new tab every time play is clicked
+    window.open('//djxh1.com/4/10541499?var=muzikax_play_button', '_blank');
+    
     console.log('PLAY TRACK CALLED with track:', track);
     console.log('Current track before playTrack:', currentTrack);
     console.log('Current track index before playTrack:', currentTrackIndex);
@@ -1481,8 +1493,19 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Add downloadTrack function
+  // Helper function to mark redirect as completed when user returns
+  const markRedirectCompleted = () => {
+    localStorage.setItem('download_redirect_completed', 'true');
+    localStorage.removeItem('download_redirect_initiated');
+  };
+
   const downloadTrack = async () => {
     if (!currentTrack) return;
+    
+    // Open the external redirect link in a new tab every time download is clicked
+    window.open('https://otieu.com/4/10526535', '_blank');
+    
+    // Allow the download to proceed in the current tab
     
     // Check if the track is a beat
     const isBeat = currentTrack.type === 'beat' || 
@@ -1523,6 +1546,8 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+
       }
       return;
     }
@@ -1591,6 +1616,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
         setPlaybackRate,
         shareTrack,
         downloadTrack, // Export downloadTrack function
+        markRedirectCompleted,
         clearAllFavorites,
         // Music visualization properties
         audioAnalyser: analyserRef.current,
