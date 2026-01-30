@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../contexts/AuthContext";
@@ -357,11 +356,7 @@ export default function Home() {
   const similarToLiked: Track[] = [...trendingTracks].sort((a, b) => (b.likes || 0) - (a.likes || 0)).slice(0, 10);
 
   return (
-    <>
-      <Head>
-        <meta name="pushsdk" content="dd3dba6d9211c567d19da6eb4f51db7e" />
-      </Head>
-      <div className="flex flex-col md:flex-row min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black relative overflow-hidden">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black relative overflow-hidden">
       {/* Loading overlay for initial data fetch */}
       {trendingLoading && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -2448,6 +2443,5 @@ export default function Home() {
         
       </main>
     </div>
-    </>
   );
 }
