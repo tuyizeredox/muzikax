@@ -42,6 +42,12 @@ const PartnerPromotion: React.FC<PartnerPromotionProps> = ({
     // Only run in browser environment
     if (typeof window === 'undefined') return;
     
+    // For immediate testing, show the component
+    if (showAfterVisits === 0) {
+      setIsVisible(true);
+      return;
+    }
+    
     const storedVisits = localStorage.getItem('muzikax_visit_count');
     const storedDismissed = localStorage.getItem('muzikax_promo_dismissed');
     const visits = storedVisits ? parseInt(storedVisits, 10) : 0;
@@ -66,7 +72,7 @@ const PartnerPromotion: React.FC<PartnerPromotionProps> = ({
       
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [showAfterVisits, autoHideTimeout]);
 
   const handlePromotionClick = () => {
     if (typeof window !== 'undefined' && (window as any).partnerPromotion) {
@@ -107,10 +113,16 @@ const PartnerPromotion: React.FC<PartnerPromotionProps> = ({
     }
   };
 
-  // Don't render if dismissed permanently
+  // Don't render if dismissed permanently (except for testing)
   const neverShowAgain = typeof window !== 'undefined' && localStorage.getItem('muzikax_promo_never_show') === 'true';
-  if (!isVisible || neverShowAgain || isDismissed) {
-    return null;
+  
+  // For testing with showAfterVisits=0, ignore dismissal
+  if (showAfterVisits === 0) {
+    if (!isVisible) return null;
+  } else {
+    if (!isVisible || neverShowAgain || isDismissed) {
+      return null;
+    }
   }
 
   if (variant === 'rewarded') {

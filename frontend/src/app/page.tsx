@@ -615,8 +615,8 @@ export default function Home() {
         {/* Partner Promotion - Recommended Option 2: Rewarded action */}
         <PartnerPromotion 
           variant="rewarded" 
-          showAfterVisits={2}
-          autoHideTimeout={45}
+          showAfterVisits={0}
+          autoHideTimeout={0}
           rewardText="🎵 Watch a quick video to enjoy 30 minutes of uninterrupted music!"
         />
         {/* Enhanced Hero Section with Image Slider */}
