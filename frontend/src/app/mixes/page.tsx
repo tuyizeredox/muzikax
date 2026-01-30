@@ -8,7 +8,7 @@ interface Track {
   title: string
   artist: string
   album?: string
-  plays: number
+  streams: number
   likes: number
   coverImage: string
   duration?: string
@@ -22,7 +22,7 @@ export default function PopularMixes() {
       id: '1',
       title: 'Rwandan Mixtape',
       artist: 'DJ Rwanda',
-      plays: 18700,
+      streams: 18700,
       likes: 1420,
       coverImage: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80',
       duration: '45:32',
@@ -32,7 +32,7 @@ export default function PopularMixes() {
       id: '2',
       title: 'Kigali Mix Session',
       artist: 'DJ Kigali',
-      plays: 14500,
+      streams: 14500,
       likes: 1180,
       coverImage: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80',
       duration: '32:15',
@@ -42,7 +42,7 @@ export default function PopularMixes() {
       id: '3',
       title: 'Afro Beats Mix',
       artist: 'Afro DJ',
-      plays: 12400,
+      streams: 12400,
       likes: 950,
       coverImage: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80',
       duration: '38:42',
@@ -52,7 +52,7 @@ export default function PopularMixes() {
       id: '4',
       title: 'Urban Mix Collection',
       artist: 'City Sounds',
-      plays: 9800,
+      streams: 9800,
       likes: 760,
       coverImage: 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80',
       duration: '42:18',
@@ -62,7 +62,7 @@ export default function PopularMixes() {
       id: '5',
       title: 'Traditional Fusion Mix',
       artist: 'Culture Blend',
-      plays: 8700,
+      streams: 8700,
       likes: 680,
       coverImage: 'https://images.unsplash.com/photo-1494293246127-b93bfbafe4f4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80',
       duration: '35:27',
@@ -72,7 +72,7 @@ export default function PopularMixes() {
       id: '6',
       title: 'Nightlife Mix',
       artist: 'Club Sounds',
-      plays: 11200,
+      streams: 11200,
       likes: 890,
       coverImage: 'https://images.unsplash.com/photo-1516280440080-0adbb0e4e070?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80',
       duration: '40:05',
@@ -139,7 +139,7 @@ export default function PopularMixes() {
                 {track.album && <p className="text-gray-500 text-xs sm:text-sm mb-3 truncate">{track.album}</p>}
                 
                 <div className="flex justify-between text-xs sm:text-sm text-gray-500">
-                  <span>{track.plays.toLocaleString()} plays</span>
+                  <span>{track.streams.toLocaleString()} streams</span>
                   <div className="flex items-center gap-1">
                     <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
