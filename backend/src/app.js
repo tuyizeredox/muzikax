@@ -47,6 +47,9 @@ const circleRoutes = require('./routes/circleRoutes');
 const challengeRoutes = require('./routes/challengeRoutes');
 const liveRoomRoutes = require('./routes/liveRoomRoutes');
 
+// Import monetization routes
+const monetizationRoutes = require('./routes/monetizationRoutes');
+
 // Load env vars
 dotenv.config();
 
@@ -270,6 +273,10 @@ console.log('Live room routes registered');
 const chatRoutes = require('./routes/chatRoutes');
 app.use('/api/community/chats', chatRoutes);
 console.log('Chat routes registered');
+
+// Register monetization routes
+app.use('/api/monetization', monetizationRoutes);
+console.log('Monetization routes registered');
 
 // Register public user routes for chat functionality
 const publicUserRoutes = require('./routes/publicUserRoutes');

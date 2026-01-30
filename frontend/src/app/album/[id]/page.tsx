@@ -1,6 +1,5 @@
 'use client';
 
-import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getAlbumById } from '../../../services/albumService';
@@ -49,15 +48,28 @@ interface Album {
   currency?: string;
 }
 
-export default function AlbumDetailPage({ params }: { params: { id: string } }) {
-  const albumId = params.id;
+export default function AlbumDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const [albumId, setAlbumId] = useState<string | null>(null);
   const [album, setAlbum] = useState<Album | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Unwrap the params Promise
+  useEffect(() => {
+    const unwrapParams = async () => {
+      const { id } = await params;
+      console.log('Album ID from params:', id);
+      setAlbumId(id);
+    };
+    unwrapParams();
+  }, [params]);
+  
   useEffect(() => {
     const fetchAlbum = async () => {
+      if (!albumId) return; // Wait for albumId to be set
+      
       try {
+        console.log('Fetching album with ID:', albumId);
         setLoading(true);
         const albumData: any = await getAlbumById(albumId);
         
@@ -129,7 +141,7 @@ export default function AlbumDetailPage({ params }: { params: { id: string } }) 
     );
   }
   
-  if (loading || !album) {
+  if (loading || !album || !albumId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black py-8 sm:py-12">
         <div className="container mx-auto px-4 sm:px-8">
@@ -140,6 +152,7 @@ export default function AlbumDetailPage({ params }: { params: { id: string } }) 
       </div>
     );
   }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black py-8 sm:py-12">
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#FF4D67]/10 rounded-full blur-3xl -z-10"></div>
@@ -208,9 +221,6 @@ export default function AlbumDetailPage({ params }: { params: { id: string } }) 
               </div>
             </div>
           </div>
-
-          {/* Track list is also handled by the client component */}
-          
         </div>
       </div>
       

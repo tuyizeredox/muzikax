@@ -428,6 +428,15 @@ const incrementPlayCount = async (req, res) => {
             return;
         }
 
+        // Update earnings for the creator if they are monetized
+        try {
+            const { updateEarnings } = require('./monetizationController');
+            await updateEarnings(track.creatorId, 1);
+        } catch (earningsError) {
+            console.error('Error updating earnings:', earningsError);
+            // Don't fail the play count update if earnings update fails
+        }
+
         // Capture IP address and store geography data
         const ipAddress = req.ip || req.connection.remoteAddress || '';
         if (ipAddress) {
