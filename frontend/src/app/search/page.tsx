@@ -57,15 +57,26 @@ interface Album {
   tracks: number
 }
 // Separate component for the main content that uses useSearchParams
+interface Playlist {
+  id: string
+  name: string
+  description: string
+  creator: string
+  coverImage: string
+  tracks: number
+  isPublic: boolean
+}
+
 function SearchResultsContent() {
   const searchParams = useSearchParams()
   const query = searchParams.get('q') || ''
   const [searchQuery, setSearchQuery] = useState(query)
-  const [activeTab, setActiveTab] = useState<'tracks' | 'artists' | 'albums'>('tracks')
+  const [activeTab, setActiveTab] = useState<'tracks' | 'artists' | 'albums' | 'playlists'>('tracks')
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null)
   const [tracks, setTracks] = useState<SearchTrack[]>([])
   const [artists, setArtists] = useState<Creator[]>([])
   const [albums, setAlbums] = useState<Album[]>([])
+  const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [following, setFollowing] = useState<Record<string, boolean>>({})
@@ -126,6 +137,7 @@ function SearchResultsContent() {
       setTracks(data.tracks || [])
       setArtists(data.artists || [])
       setAlbums(data.albums || [])
+      setPlaylists(data.playlists || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred')
       console.error('Search error:', err)
@@ -295,8 +307,8 @@ function SearchResultsContent() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <p className="text-gray-400">
               {loading ? 'Searching...' : selectedGenre 
-                ? `Found ${tracks.length + artists.length + albums.length} results for "${query || 'all'}" in ${genres.find(g => g.id === selectedGenre)?.name || selectedGenre}`
-                : `Found ${tracks.length + artists.length + albums.length} results for "${query}"`}
+                ? `Found ${tracks.length + artists.length + albums.length + playlists.length} results for "${query || 'all'}" in ${genres.find(g => g.id === selectedGenre)?.name || selectedGenre}`
+                : `Found ${tracks.length + artists.length + albums.length + playlists.length} results for "${query}"`}
             </p>
             
             {/* Tabs */}
@@ -330,6 +342,16 @@ function SearchResultsContent() {
                 onClick={() => setActiveTab('albums')}
               >
                 Albums ({albums.length})
+              </button>
+              <button
+                className={`py-2 px-4 font-medium text-sm sm:text-base transition-colors ${
+                  activeTab === 'playlists'
+                    ? 'text-[#FF4D67] border-b-2 border-[#FF4D67]'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+                onClick={() => setActiveTab('playlists')}
+              >
+                Playlists ({playlists.length})
               </button>
             </div>
           </div>
@@ -502,7 +524,13 @@ function SearchResultsContent() {
                             className="w-full aspect-square object-cover"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <button className="w-10 h-10 sm:w-12 sm:h-12 rounded-full gradient-primary flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                            <button 
+                              onClick={() => {
+                                // TODO: Implement album play functionality
+                                // This would require fetching full album data with tracks
+                                alert('Album playback coming soon!');
+                              }}
+                              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full gradient-primary flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
                               <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
                               </svg>
@@ -526,6 +554,58 @@ function SearchResultsContent() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                       </svg>
                       <h3 className="mt-4 text-lg font-medium text-white">No albums found</h3>
+                      <p className="mt-2 text-gray-400">Try adjusting your search to find what you're looking for.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Playlists Tab */}
+              {activeTab === 'playlists' && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {playlists.length > 0 ? (
+                    playlists.map((playlist) => (
+                      <div key={playlist.id} className="group card-bg rounded-xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                        <div className="relative">
+                          <img 
+                            src={playlist.coverImage || '/placeholder-playlist.png'} 
+                            alt={playlist.name} 
+                            className="w-full aspect-square object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button 
+                              onClick={() => {
+                                // TODO: Implement playlist play functionality
+                                // This would require fetching full playlist data with tracks
+                                alert('Playlist playback coming soon!');
+                              }}
+                              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full gradient-primary flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="p-3">
+                          <h3 className="font-bold text-white text-sm sm:text-base mb-1 truncate">{playlist.name}</h3>
+                          <p className="text-gray-400 text-xs sm:text-sm truncate">
+                            {playlist.description ? `${playlist.description.substring(0, 40)}...` : 'Playlist'}
+                          </p>
+                          <p className="text-gray-500 text-xs mb-2">by {playlist.creator}</p>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 text-xs">{playlist.tracks} tracks</span>
+                            <span className="text-gray-500 text-xs capitalize">{playlist.isPublic ? 'Public' : 'Private'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-12">
+                      <svg className="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      <h3 className="mt-4 text-lg font-medium text-white">No playlists found</h3>
                       <p className="mt-2 text-gray-400">Try adjusting your search to find what you're looking for.</p>
                     </div>
                   )}

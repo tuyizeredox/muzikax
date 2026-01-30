@@ -7,6 +7,32 @@ import { useAudioPlayer } from '@/contexts/AudioPlayerContext'
 import { Suspense } from 'react'
 import { followCreator, unfollowCreator, checkFollowStatus } from '@/services/trackService'
 
+interface Album {
+  _id: string
+  id: string
+  title: string
+  artist: string
+  coverImage?: string
+  coverURL?: string
+  releaseDate?: string
+  tracks?: any[]
+  plays: number
+}
+
+interface Playlist {
+  _id: string
+  id: string
+  name: string
+  description?: string
+  userId: {
+    _id: string
+    name: string
+  }
+  tracks: any[]
+  isPublic: boolean
+  createdAt: string
+}
+
 interface Track {  
   _id?: string
   id: string
@@ -58,7 +84,7 @@ const categories = [
 
 // Separate component for the main content that uses useSearchParams
 function ExploreContent() {
-  const [activeTab, setActiveTab] = useState<'tracks' | 'creators'>('tracks')
+  const [activeTab, setActiveTab] = useState<'tracks' | 'creators' | 'albums' | 'playlists'>('tracks')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState<string>('')
   const searchParams = useSearchParams()
@@ -66,6 +92,12 @@ function ExploreContent() {
   const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } = useTrendingTracks(20)
   const { creators: popularCreatorsData, loading: creatorsLoading, refresh: refreshCreators } = usePopularCreators(20)
   const { currentTrack, isPlaying, playTrack, setCurrentPlaylist, favorites, favoritesLoading, addToFavorites, removeFromFavorites, addToQueue } = useAudioPlayer()
+
+  // State for albums and playlists
+  const [albums, setAlbums] = useState<Album[]>([])
+  const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const [albumsLoading, setAlbumsLoading] = useState<boolean>(true)
+  const [playlistsLoading, setPlaylistsLoading] = useState<boolean>(true)
 
   // State for tracking which tracks are favorited
   const [favoriteStatus, setFavoriteStatus] = useState<Record<string, boolean>>({});
@@ -110,6 +142,69 @@ function ExploreContent() {
       setFavoriteStatus(status);
     }
   }, [favorites, favoritesLoading]);
+
+  // Fetch albums data
+  useEffect(() => {
+    const fetchAlbums = async () => {
+      try {
+        setAlbumsLoading(true);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/albums`);
+        if (response.ok) {
+          const data = await response.json();
+          const albumsData = Array.isArray(data) ? data : (data.albums || []);
+          setAlbums(albumsData.map((album: any) => ({
+            _id: album._id,
+            id: album._id,
+            title: album.title,
+            artist: album.creatorId ? 
+              (typeof album.creatorId === 'object' ? album.creatorId.name : 'Unknown Artist') : 
+              'Unknown Artist',
+            coverImage: album.coverURL || '',
+            coverURL: album.coverURL || '',
+            releaseDate: album.releaseDate,
+            tracks: album.tracks || [],
+            plays: album.plays || 0
+          })));
+        }
+      } catch (error) {
+        console.error('Error fetching albums:', error);
+      } finally {
+        setAlbumsLoading(false);
+      }
+    };
+
+    fetchAlbums();
+  }, []);
+
+  // Fetch playlists data
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      try {
+        setPlaylistsLoading(true);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/public/playlists/recommended`);
+        if (response.ok) {
+          const data = await response.json();
+          const playlistsData = data.popular || data.recent || [];
+          setPlaylists(playlistsData.map((playlist: any) => ({
+            _id: playlist._id,
+            id: playlist._id,
+            name: playlist.name,
+            description: playlist.description || '',
+            userId: playlist.userId || { _id: '', name: 'Unknown Creator' },
+            tracks: playlist.tracks || [],
+            isPublic: playlist.isPublic || true,
+            createdAt: playlist.createdAt
+          })));
+        }
+      } catch (error) {
+        console.error('Error fetching playlists:', error);
+      } finally {
+        setPlaylistsLoading(false);
+      }
+    };
+
+    fetchPlaylists();
+  }, []);
 
   // Update follow status for creators when they are loaded
   useEffect(() => {
@@ -455,6 +550,26 @@ function ExploreContent() {
           </button>
           <button
             className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base transition-colors ${
+              activeTab === 'albums'
+                ? 'text-[#FF4D67] border-b-2 border-[#FF4D67]'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+            onClick={() => setActiveTab('albums')}
+          >
+            Albums
+          </button>
+          <button
+            className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base transition-colors ${
+              activeTab === 'playlists'
+                ? 'text-[#FF4D67] border-b-2 border-[#FF4D67]'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+            onClick={() => setActiveTab('playlists')}
+          >
+            Playlists
+          </button>
+          <button
+            className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base transition-colors ${
               activeTab === 'creators'
                 ? 'text-[#FFCB2B] border-b-2 border-[#FFCB2B]'
                 : 'text-gray-500 hover:text-gray-300'
@@ -464,6 +579,233 @@ function ExploreContent() {
             Top Creators
           </button>
         </div>
+
+        {/* Albums Grid */}
+        {activeTab === 'albums' && (
+          <>
+            {albumsLoading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="text-white">Loading albums...</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+                {albums.map((album) => (
+                  <div key={album.id} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                    <div className="relative">
+                      <img 
+                        src={album.coverImage || album.coverURL || '/placeholder-album.png'} 
+                        alt={album.title} 
+                        className="w-full h-40 sm:h-48 md:h-56 object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/placeholder-album.png';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button 
+                          onClick={() => {
+                            // Play first track from album if available
+                            if (album.tracks && album.tracks.length > 0) {
+                              const firstTrack = album.tracks[0];
+                              if (firstTrack.audioURL) {
+                                playTrack({
+                                  id: firstTrack._id || firstTrack.id,
+                                  title: firstTrack.title,
+                                  artist: album.artist,
+                                  coverImage: album.coverImage || album.coverURL || '/placeholder-album.png',
+                                  audioUrl: firstTrack.audioURL,
+                                  plays: firstTrack.plays || 0,
+                                  likes: firstTrack.likes || 0,
+                                  creatorId: typeof firstTrack.creatorId === 'object' && firstTrack.creatorId !== null ? (firstTrack.creatorId as any)._id : firstTrack.creatorId,
+                                });
+                                
+                                // Set playlist to all tracks in album
+                                const albumTracks = album.tracks
+                                  .filter((t: any) => t.audioURL)
+                                  .map((t: any) => ({
+                                    id: t._id || t.id || 'unknown',
+                                    title: t.title,
+                                    artist: album.artist,
+                                    coverImage: album.coverImage || album.coverURL || '/placeholder-album.png',
+                                    audioUrl: t.audioURL,
+                                    plays: t.plays || 0,
+                                    likes: t.likes || 0,
+                                    creatorId: typeof t.creatorId === 'object' && t.creatorId !== null ? (t.creatorId as any)._id : t.creatorId,
+                                  }));
+                                setCurrentPlaylist(albumTracks);
+                                
+                                // Add all tracks to queue
+                                albumTracks.forEach((track: any) => {
+                                  try {
+                                    addToQueue({
+                                      id: track.id,
+                                      title: track.title,
+                                      artist: track.artist,
+                                      coverImage: track.coverImage,
+                                      audioUrl: track.audioUrl,
+                                      plays: track.plays,
+                                      likes: track.likes,
+                                      creatorId: track.creatorId,
+                                    });
+                                  } catch (error) {
+                                    console.error('Error adding track to queue:', error);
+                                  }
+                                });
+                                
+                                // Show success notification
+                                const toastEvent = new CustomEvent('showToast', {
+                                  detail: {
+                                    message: `Added ${albumTracks.length} tracks from "${album.title}" to queue!`,
+                                    type: 'success'
+                                  }
+                                });
+                                window.dispatchEvent(toastEvent);
+                              }
+                            }
+                          }}
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#FF4D67] flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg hover:bg-[#ff2a4d] hover:scale-105">
+                          <svg className="w-6 h-6 sm:w-7 sm:h-7 ml-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 sm:p-5">
+                      <h3 className="font-bold text-white text-lg mb-1 truncate">{album.title}</h3>
+                      <p className="text-gray-400 text-sm sm:text-base mb-3 sm:mb-4">{album.artist}</p>
+                      
+                      <div className="flex justify-between text-xs sm:text-sm text-gray-500">
+                        <span>{album.tracks?.length || 0} tracks</span>
+                        <div className="flex items-center gap-1">
+                          <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
+                          </svg>
+                          <span>{album.plays}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Playlists Grid */}
+        {activeTab === 'playlists' && (
+          <>
+            {playlistsLoading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="text-white">Loading playlists...</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+                {playlists.map((playlist) => (
+                  <div key={playlist.id} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                    <div className="relative">
+                      <img 
+                        src={playlist.tracks && playlist.tracks.length > 0 ? 
+                          (playlist.tracks[0].coverURL || '/placeholder-playlist.png') : 
+                          '/placeholder-playlist.png'} 
+                        alt={playlist.name} 
+                        className="w-full h-40 sm:h-48 md:h-56 object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/placeholder-playlist.png';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button 
+                          onClick={() => {
+                            // Play first track from playlist if available
+                            if (playlist.tracks && playlist.tracks.length > 0) {
+                              const playableTracks = playlist.tracks.filter((t: any) => t.audioURL);
+                              if (playableTracks.length > 0) {
+                                const firstTrack = playableTracks[0];
+                                playTrack({
+                                  id: firstTrack._id || firstTrack.id,
+                                  title: firstTrack.title,
+                                  artist: typeof firstTrack.creatorId === 'object' && firstTrack.creatorId !== null ? 
+                                    (firstTrack.creatorId as any).name : 'Unknown Artist',
+                                  coverImage: firstTrack.coverURL || '/placeholder-playlist.png',
+                                  audioUrl: firstTrack.audioURL,
+                                  plays: firstTrack.plays || 0,
+                                  likes: firstTrack.likes || 0,
+                                  creatorId: typeof firstTrack.creatorId === 'object' && firstTrack.creatorId !== null ? 
+                                    (firstTrack.creatorId as any)._id : firstTrack.creatorId,
+                                });
+                                
+                                // Set playlist to all playable tracks
+                                const formattedTracks = playableTracks.map((t: any) => ({
+                                  id: t._id || t.id || 'unknown',
+                                  title: t.title,
+                                  artist: typeof t.creatorId === 'object' && t.creatorId !== null ? 
+                                    (t.creatorId as any).name : 'Unknown Artist',
+                                  coverImage: t.coverURL || '/placeholder-playlist.png',
+                                  audioUrl: t.audioURL,
+                                  plays: t.plays || 0,
+                                  likes: t.likes || 0,
+                                  creatorId: typeof t.creatorId === 'object' && t.creatorId !== null ? 
+                                    (t.creatorId as any)._id : t.creatorId,
+                                }));
+                                setCurrentPlaylist(formattedTracks);
+                                
+                                // Add all tracks to queue
+                                formattedTracks.forEach((track: any) => {
+                                  try {
+                                    addToQueue({
+                                      id: track.id,
+                                      title: track.title,
+                                      artist: track.artist,
+                                      coverImage: track.coverImage,
+                                      audioUrl: track.audioUrl,
+                                      plays: track.plays,
+                                      likes: track.likes,
+                                      creatorId: track.creatorId,
+                                    });
+                                  } catch (error) {
+                                    console.error('Error adding track to queue:', error);
+                                  }
+                                });
+                                
+                                // Show success notification
+                                const toastEvent = new CustomEvent('showToast', {
+                                  detail: {
+                                    message: `Added ${formattedTracks.length} tracks from "${playlist.name}" to queue!`,
+                                    type: 'success'
+                                  }
+                                });
+                                window.dispatchEvent(toastEvent);
+                              }
+                            }
+                          }}
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#FF4D67] flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg hover:bg-[#ff2a4d] hover:scale-105">
+                          <svg className="w-6 h-6 sm:w-7 sm:h-7 ml-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 sm:p-5">
+                      <h3 className="font-bold text-white text-lg mb-1 truncate">{playlist.name}</h3>
+                      <p className="text-gray-400 text-sm sm:text-base mb-3 sm:mb-4">
+                        {playlist.description ? `${playlist.description.substring(0, 60)}...` : 'Playlist'}
+                      </p>
+                      <p className="text-gray-500 text-xs mb-3">by {playlist.userId?.name || 'Unknown Creator'}</p>
+                      
+                      <div className="flex justify-between text-xs sm:text-sm text-gray-500">
+                        <span>{playlist.tracks?.length || 0} tracks</span>
+                        <span className="capitalize">{playlist.isPublic ? 'Public' : 'Private'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Tracks Grid */}
         {activeTab === 'tracks' && (

@@ -1,8 +1,9 @@
 const Track = require('../models/Track');
 const User = require('../models/User');
 const Album = require('../models/Album');
+const Playlist = require('../models/Playlist');
 
-// Search across tracks, artists, and albums
+// Search across tracks, artists, albums, and playlists
 const searchAll = async (req, res) => {
   try {
     const query = req.query['q'] || '';
@@ -90,7 +91,10 @@ const searchAll = async (req, res) => {
       
       // Add text search if query exists
       if (searchRegex) {
-        albumQuery.title = searchRegex;
+        albumQuery.$or = [
+          { title: searchRegex },
+          { description: searchRegex }
+        ];
       }
       
       // Add genre filter if specified
@@ -110,6 +114,53 @@ const searchAll = async (req, res) => {
         coverImage: album.coverURL || '',
         year: album.releaseDate ? new Date(album.releaseDate).getFullYear() : new Date().getFullYear(),
         tracks: album.tracks ? album.tracks.length : 0
+      }));
+    }
+    
+    // Search playlists if type is 'all' or 'playlists'
+    if (type === 'all' || type === 'playlists') {
+      // Build playlist query - only search public playlists
+      const playlistQuery = { isPublic: true };
+      
+      // Add text search if query exists
+      if (searchRegex) {
+        playlistQuery.$or = [
+          { name: searchRegex },
+          { description: searchRegex }
+        ];
+      }
+      
+      // Genre filter doesn't apply to playlists directly, but we can filter by tracks' genres
+      const playlists = await Playlist.find(playlistQuery)
+      .populate('userId', 'name')
+      .populate({
+        path: 'tracks',
+        select: 'title genre creatorId',
+        populate: {
+          path: 'creatorId',
+          select: 'name'
+        }
+      })
+      .limit(20)
+      .sort({ createdAt: -1 });
+      
+      // Filter by genre if specified (check if any track in playlist matches genre)
+      let filteredPlaylists = playlists;
+      if (genre) {
+        filteredPlaylists = playlists.filter(playlist => 
+          playlist.tracks && playlist.tracks.some(track => track.genre === genre)
+        );
+      }
+      
+      results.playlists = filteredPlaylists.map(playlist => ({
+        id: playlist._id,
+        name: playlist.name,
+        description: playlist.description || '',
+        creator: playlist.userId ? playlist.userId.name : 'Unknown Creator',
+        coverImage: playlist.tracks && playlist.tracks.length > 0 ? 
+                   (playlist.tracks[0].coverURL || '') : '',
+        tracks: playlist.tracks ? playlist.tracks.length : 0,
+        isPublic: playlist.isPublic
       }));
     }
     

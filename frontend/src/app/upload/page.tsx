@@ -531,9 +531,14 @@ export default function Upload() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black py-8 sm:py-12">
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#FF4D67]/10 rounded-full blur-3xl -z-10"></div>
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#FFCB2B]/10 rounded-full blur-3xl -z-10"></div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black py-8 sm:py-12 overflow-x-hidden">
+      {/* Background elements with better positioning for mobile */}
+      <div className="absolute top-10 left-10 w-64 h-64 sm:w-80 sm:h-80 bg-[#FF4D67]/10 rounded-full blur-3xl -z-10 hidden md:block"></div>
+      <div className="absolute bottom-10 right-10 w-64 h-64 sm:w-80 sm:h-80 bg-[#FFCB2B]/10 rounded-full blur-3xl -z-10 hidden md:block"></div>
+      
+      {/* Simpler mobile background */}
+      <div className="absolute top-5 left-5 w-32 h-32 bg-[#FF4D67]/5 rounded-full blur-2xl -z-10 md:hidden"></div>
+      <div className="absolute bottom-5 right-5 w-32 h-32 bg-[#FFCB2B]/5 rounded-full blur-2xl -z-10 md:hidden"></div>
       
       {/* Upgrade Prompt Modal */}
       {showUpgradePrompt && (
