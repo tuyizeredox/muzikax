@@ -20,6 +20,9 @@ interface SearchTrack {
   audioURL: string
   paymentType?: 'free' | 'paid'
   price?: number
+  type?: 'song' | 'beat' | 'mix'
+  creatorId?: string
+  creatorWhatsapp?: string
 }
 
 interface PlayerTrack {
@@ -390,6 +393,29 @@ function SearchResultsContent() {
                             alt={track.title} 
                             className="w-16 h-16 rounded-lg object-cover"
                           />
+                          {/* Beat indicator badge */}
+                          {track.type === 'beat' && (
+                            <div className="absolute -top-2 -left-2">
+                              <span className="px-2 py-1 bg-purple-600 text-white text-xs rounded-full">
+                                BEAT
+                              </span>
+                            </div>
+                          )}
+                          {/* Payment type indicator for beats */}
+                          {track.type === 'beat' && (
+                            <div className="absolute -top-2 -right-2">
+                              <span className={`px-2 py-1 text-xs rounded-full ${track.paymentType === 'paid' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}>
+                                {track.paymentType === 'paid' ? 'PAID' : 'FREE'}
+                              </span>
+                            </div>
+                          )}
+                          {track.type === 'beat' && track.paymentType === 'paid' && track.price && (
+                            <div className="absolute -bottom-2 -right-2">
+                              <span className="px-2 py-1 text-xs rounded-full bg-yellow-600 text-white">
+                                {track.price.toLocaleString()} RWF
+                              </span>
+                            </div>
+                          )}
                           <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => {
@@ -401,14 +427,14 @@ function SearchResultsContent() {
                                   coverImage: track.coverImage,
                                   audioUrl: track.audioURL, // Use the audioURL from the track
                                   duration: undefined, // Duration is optional
-                                  creatorId: undefined, // Creator ID is optional for search results
+                                  creatorId: track.creatorId, // Creator ID from search results
                                   albumId: undefined, // Album ID is optional
                                   plays: track.plays,
                                   likes: track.likes,
-                                  type: 'song', // Default to song for search results
+                                  type: track.type || 'song', // Include track type
                                   paymentType: track.paymentType, // Include payment type
                                   price: track.price, // Include price
-                                  creatorWhatsapp: undefined // WhatsApp is optional
+                                  creatorWhatsapp: track.creatorWhatsapp // Include WhatsApp contact
                                 };
                                 playTrack(formattedTrack);
                               }}

@@ -981,9 +981,11 @@ const FullPagePlayer = () => {
 
 Creator's WhatsApp: ${creatorWhatsapp}
 
+${currentTrack.price ? `Price: ${currentTrack.price.toLocaleString()} ${currentTrack.currency || 'RWF'}` : ''}
+
 Would you like to open WhatsApp to contact the creator?`;
                               if (confirm(message)) {
-                                const whatsappMessage = `Hi, I'm interested in your beat "${currentTrack.title}" that I found on MuzikaX.`;
+                                const whatsappMessage = `Hi, I'm interested in your beat "${currentTrack.title}" that I found on MuzikaX.${currentTrack.price ? ` Price: ${currentTrack.price.toLocaleString()} ${currentTrack.currency || 'RWF'}` : ''}`;
                                 window.open(`https://wa.me/${creatorWhatsapp}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
                               }
                             } else {
@@ -1013,6 +1015,11 @@ Would you like to open WhatsApp to contact the creator?`;
                           </div>
                           <span className="font-medium">WhatsApp</span>
                           <span className="text-xs opacity-75">Paid Beat</span>
+                          {currentTrack.price && (
+                            <span className="text-xs text-yellow-400 font-medium">
+                              {currentTrack.price.toLocaleString()} {currentTrack.currency || 'RWF'}
+                            </span>
+                          )}
                         </button>
                       ) : (
                         // Direct download button for free beats

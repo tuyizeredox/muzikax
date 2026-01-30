@@ -1198,7 +1198,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
 
   // Queue management functions
   const addToQueue = (track: Track) => {
-    // Ensure the track has all necessary properties to play
+    // Ensure the track has all necessary properties to play, especially for beats
     const normalizedTrack = {
       id: track.id,
       title: track.title,
@@ -1207,10 +1207,12 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
       audioUrl: track.audioUrl || track.audioURL || '',
       creatorId: track.creatorId,
       likes: track.likes || 0,
+      plays: track.plays || 0,
       type: track.type || 'song',
-      creatorWhatsapp: track.creatorWhatsapp,
-      // Include other necessary properties
-      plays: track.plays || 0
+      paymentType: track.paymentType || 'free', // Preserve payment type for beats
+      price: track.price || 0, // Preserve price for paid beats
+      currency: track.currency || 'RWF', // Preserve currency
+      creatorWhatsapp: track.creatorWhatsapp, // Preserve WhatsApp contact for beats
     };
     
     setQueue(prev => {

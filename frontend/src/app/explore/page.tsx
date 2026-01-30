@@ -44,6 +44,12 @@ interface Track {
   coverURL?: string
   category: string
   duration?: string
+  audioURL?: string
+  type?: 'song' | 'beat' | 'mix'
+  paymentType?: 'free' | 'paid'
+  price?: number
+  creatorId?: string
+  creatorWhatsapp?: string
 }
 
 interface Creator {
@@ -84,7 +90,7 @@ const categories = [
 
 // Separate component for the main content that uses useSearchParams
 function ExploreContent() {
-  const [activeTab, setActiveTab] = useState<'tracks' | 'creators' | 'albums' | 'playlists'>('tracks')
+  const [activeTab, setActiveTab] = useState<'tracks' | 'beats' | 'creators' | 'albums' | 'playlists'>('tracks')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState<string>('')
   const searchParams = useSearchParams()
@@ -96,8 +102,10 @@ function ExploreContent() {
   // State for albums and playlists
   const [albums, setAlbums] = useState<Album[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const [beats, setBeats] = useState<Track[]>([])
   const [albumsLoading, setAlbumsLoading] = useState<boolean>(true)
   const [playlistsLoading, setPlaylistsLoading] = useState<boolean>(true)
+  const [beatsLoading, setBeatsLoading] = useState<boolean>(true)
 
   // State for tracking which tracks are favorited
   const [favoriteStatus, setFavoriteStatus] = useState<Record<string, boolean>>({});
@@ -204,6 +212,48 @@ function ExploreContent() {
     };
 
     fetchPlaylists();
+  }, []);
+
+  // Fetch beats data
+  useEffect(() => {
+    const fetchBeats = async () => {
+      try {
+        setBeatsLoading(true);
+        // Fetch beats - tracks with type 'beat'
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tracks/type?type=beat&limit=20`);
+        if (response.ok) {
+          const data = await response.json();
+          const beatsData = Array.isArray(data) ? data : (data.tracks || []);
+          setBeats(beatsData.map((beat: any) => ({
+            _id: beat._id,
+            id: beat._id,
+            title: beat.title,
+            artist: typeof beat.creatorId === 'object' && beat.creatorId !== null ? 
+              (beat.creatorId as any).name : 'Unknown Artist',
+            plays: beat.plays || 0,
+            likes: beat.likes || 0,
+            coverImage: beat.coverURL || '',
+            coverURL: beat.coverURL || '',
+            category: beat.genre || 'afrobeat',
+            duration: beat.duration || '',
+            audioURL: beat.audioURL || '',
+            type: beat.type || 'beat',
+            paymentType: beat.paymentType || 'free',
+            price: beat.price || 0,
+            creatorId: typeof beat.creatorId === 'object' && beat.creatorId !== null ? 
+              (beat.creatorId as any)._id : beat.creatorId,
+            creatorWhatsapp: typeof beat.creatorId === 'object' && beat.creatorId !== null ? 
+              (beat.creatorId as any).whatsappContact : undefined
+          })));
+        }
+      } catch (error) {
+        console.error('Error fetching beats:', error);
+      } finally {
+        setBeatsLoading(false);
+      }
+    };
+
+    fetchBeats();
   }, []);
 
   // Update follow status for creators when they are loaded
@@ -550,6 +600,16 @@ function ExploreContent() {
           </button>
           <button
             className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base transition-colors ${
+              activeTab === 'beats'
+                ? 'text-[#FF4D67] border-b-2 border-[#FF4D67]'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+            onClick={() => setActiveTab('beats')}
+          >
+            Beats
+          </button>
+          <button
+            className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base transition-colors ${
               activeTab === 'albums'
                 ? 'text-[#FF4D67] border-b-2 border-[#FF4D67]'
                 : 'text-gray-500 hover:text-gray-300'
@@ -579,6 +639,214 @@ function ExploreContent() {
             Top Creators
           </button>
         </div>
+
+        {/* Beats Grid */}
+        {activeTab === 'beats' && (
+          <>
+            {beatsLoading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="text-white">Loading beats...</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+                {beats.map((beat) => (
+                  <div key={beat.id} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                    <div className="relative">
+                      <img 
+                        src={beat.coverImage || beat.coverURL || '/placeholder-track.png'} 
+                        alt={beat.title} 
+                        className="w-full h-40 sm:h-48 md:h-56 object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/placeholder-track.png';
+                        }}
+                      />
+                      {/* Beat indicator badge */}
+                      <div className="absolute top-3 left-3">
+                        <span className="px-2 py-1 bg-purple-600 text-white text-xs rounded-full">
+                          BEAT
+                        </span>
+                      </div>
+                      {/* Payment type indicator */}
+                      <div className="absolute top-3 right-3">
+                        <span className={`px-2 py-1 text-xs rounded-full ${beat.paymentType === 'paid' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}>
+                          {beat.paymentType === 'paid' ? 'PAID' : 'FREE'}
+                        </span>
+                      </div>
+                      {beat.paymentType === 'paid' && beat.price && (
+                        <div className="absolute top-10 right-3">
+                          <span className="px-2 py-1 text-xs rounded-full bg-yellow-600 text-white">
+                            {beat.price.toLocaleString()} RWF
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button 
+                          onClick={() => {
+                            // Play the beat
+                            if (beat.audioURL) {
+                              playTrack({
+                                id: beat.id,
+                                title: beat.title,
+                                artist: beat.artist,
+                                coverImage: beat.coverImage || beat.coverURL || '/placeholder-track.png',
+                                audioUrl: beat.audioURL,
+                                plays: beat.plays || 0,
+                                likes: beat.likes || 0,
+                                creatorId: beat.creatorId,
+                                type: beat.type,
+                                paymentType: beat.paymentType,
+                                price: beat.price,
+                                creatorWhatsapp: beat.creatorWhatsapp
+                              });
+                              
+                              // Set playlist to all beats
+                              const beatTracks = beats
+                                .filter(b => b.audioURL)
+                                .map(b => ({
+                                  id: b.id,
+                                  title: b.title,
+                                  artist: b.artist,
+                                  coverImage: b.coverImage || b.coverURL || '/placeholder-track.png',
+                                  audioUrl: b.audioURL || '',
+                                  plays: b.plays || 0,
+                                  likes: b.likes || 0,
+                                  creatorId: b.creatorId,
+                                  type: b.type,
+                                  paymentType: b.paymentType,
+                                  price: b.price,
+                                  creatorWhatsapp: b.creatorWhatsapp
+                                }));
+                              setCurrentPlaylist(beatTracks);
+                              
+                              // Add all beats to queue
+                              beatTracks.forEach((track: any) => {
+                                try {
+                                  addToQueue({
+                                    id: track.id,
+                                    title: track.title,
+                                    artist: track.artist,
+                                    coverImage: track.coverImage,
+                                    audioUrl: track.audioUrl,
+                                    plays: track.plays,
+                                    likes: track.likes,
+                                    creatorId: track.creatorId,
+                                    type: track.type,
+                                    paymentType: track.paymentType,
+                                    price: track.price,
+                                    creatorWhatsapp: track.creatorWhatsapp
+                                  });
+                                } catch (error) {
+                                  console.error('Error adding beat to queue:', error);
+                                }
+                              });
+                              
+                              // Show success notification
+                              const toastEvent = new CustomEvent('showToast', {
+                                detail: {
+                                  message: `Added ${beatTracks.length} beats to queue!`,
+                                  type: 'success'
+                                }
+                              });
+                              window.dispatchEvent(toastEvent);
+                            }
+                          }}
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#FF4D67] flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg hover:bg-[#ff2a4d] hover:scale-105">
+                          <svg className="w-6 h-6 sm:w-7 sm:h-7 ml-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex flex-col gap-2">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(beat.id, beat);
+                          }}
+                          className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 shadow-md"
+                        >
+                          <svg 
+                            className={`w-5 h-5 sm:w-6 sm:h-6 transition-all duration-300 ${favoriteStatus[beat.id] ? 'text-red-500 fill-current scale-110' : 'stroke-current'}`}
+                            fill={favoriteStatus[beat.id] ? "currentColor" : "none"}
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            viewBox="0 0 24 24" 
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4 4 0 000 6.364L12 20.364l7.682-7.682a4 4 0 00-6.364-6.364L12 7.636l-1.318-1.318a4 4 0 000-5.656z"></path>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            try {
+                              addToQueue({
+                                id: beat.id,
+                                title: beat.title,
+                                artist: beat.artist,
+                                coverImage: beat.coverImage || beat.coverURL || '/placeholder-track.png',
+                                audioUrl: beat.audioURL || '',
+                                duration: undefined,
+                                creatorId: beat.creatorId,
+                                type: beat.type,
+                                paymentType: beat.paymentType,
+                                price: beat.price,
+                                creatorWhatsapp: beat.creatorWhatsapp
+                              });
+                              const toastEvent = new CustomEvent('showToast', {
+                                detail: {
+                                  message: `Added ${beat.title} to queue!`,
+                                  type: 'success'
+                                }
+                              });
+                              window.dispatchEvent(toastEvent);
+                            } catch (error) {
+                              console.error('Error adding beat to queue:', error);
+                              const toastEvent = new CustomEvent('showToast', {
+                                detail: {
+                                  message: `Failed to add ${beat.title} to queue`,
+                                  type: 'error'
+                                }
+                              });
+                              window.dispatchEvent(toastEvent);
+                            }
+                          }}
+                          className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 shadow-md"
+                          title={`Add ${beat.title} to queue`}
+                        >
+                          <svg 
+                            className="w-5 h-5 sm:w-6 sm:h-6"
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24" 
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 sm:p-5">
+                      <h3 className="font-bold text-white text-lg mb-1 truncate">{beat.title}</h3>
+                      <p className="text-gray-400 text-sm sm:text-base mb-3 sm:mb-4">{beat.artist}</p>
+                      
+                      <div className="flex justify-between text-xs sm:text-sm text-gray-500">
+                        <span>{beat.plays.toLocaleString()} plays</span>
+                        <div className="flex items-center gap-1">
+                          <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
+                          </svg>
+                          <span>{beat.likes}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Albums Grid */}
         {activeTab === 'albums' && (

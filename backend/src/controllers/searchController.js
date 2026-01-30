@@ -52,7 +52,12 @@ const searchAll = async (req, res) => {
         likes: track.likes,
         coverImage: track.coverURL || '',
         duration: '', // Duration would need to be added to the Track model
-        audioURL: track.audioURL
+        audioURL: track.audioURL,
+        type: track.type || 'song',
+        paymentType: track.paymentType || 'free',
+        price: track.price || 0,
+        creatorId: track.creatorId ? track.creatorId._id : null,
+        creatorWhatsapp: track.creatorId ? track.creatorId.whatsappContact : null
       }));
     }
     
