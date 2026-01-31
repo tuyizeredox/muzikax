@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useTrendingTracks, usePopularCreators } from '@/hooks/useTracks'
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext'
@@ -62,31 +62,7 @@ interface Creator {
   verified?: boolean
 }
 
-const categories = [
-  { id: 'afrobeat', name: 'Afrobeat' },
-  { id: 'amapiano', name: 'Amapiano' },
-  { id: 'hiphop', name: 'Hip Hop' },
-  { id: 'rnb', name: 'R&B' },
-  { id: 'afropop', name: 'Afropop' },
-  { id: 'gospel', name: 'Gospel' },
-  { id: 'traditional', name: 'Traditional' },
-  { id: 'dancehall', name: 'Dancehall' },
-  { id: 'reggae', name: 'Reggae' },
-  { id: 'soul', name: 'Soul' },
-  { id: 'jazz', name: 'Jazz' },
-  { id: 'blues', name: 'Blues' },
-  { id: 'pop', name: 'Pop' },
-  { id: 'rock', name: 'Rock' },
-  { id: 'electronic', name: 'Electronic' },
-  { id: 'house', name: 'House' },
-  { id: 'techno', name: 'Techno' },
-  { id: 'drill', name: 'Drill' },
-  { id: 'trap', name: 'Trap' },
-  { id: 'lofi', name: 'Lo-Fi' },
-  { id: 'ambient', name: 'Ambient' },
-  { id: 'beats', name: 'Beats' },
-  { id: 'mixes', name: 'Mixes' }
-]
+// Removed duplicate categories definition - keeping only the one at the top level
 
 // Separate component for the main content that uses useSearchParams
 function ExploreContent() {
@@ -95,7 +71,44 @@ function ExploreContent() {
   const [searchTerm, setSearchTerm] = useState<string>('')
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } = useTrendingTracks(20)
+  // Use pagination for lazy loading
+  const [page, setPage] = useState(1);
+  const [allTracks, setAllTracks] = useState<Track[]>([]);
+  const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks, total: totalTracks, pages: totalPages } = useTrendingTracks(20, page); // Load 20 tracks per page
+
+  // Handle data loading - clear and replace tracks instead of accumulating
+  useEffect(() => {
+    if (trendingTracksData.length > 0 && !trendingLoading) {
+      const newTracks: Track[] = trendingTracksData.map(track => ({
+        id: track._id,
+        _id: track._id,
+        title: track.title,
+        artist: typeof track.creatorId === "object" && track.creatorId !== null
+          ? (track.creatorId as any).name
+          : "Unknown Artist",
+        album: "",
+        plays: track.plays,
+        likes: track.likes,
+        coverImage: track.coverURL || "",
+        coverURL: track.coverURL,
+        duration: "",
+        category: track.type,
+        type: track.type as 'song' | 'beat' | 'mix',
+        paymentType: track.paymentType,
+        creatorId: typeof track.creatorId === "object" && track.creatorId !== null
+          ? (track.creatorId as any)._id
+          : track.creatorId
+      }));
+      // Replace all tracks instead of accumulating to prevent duplicates
+      setAllTracks(newTracks);
+    }
+  }, [trendingTracksData, trendingLoading, page, selectedCategory, searchTerm]);
+
+  const loadMore = useCallback(() => {
+    if (page < (totalPages || 1) && !trendingLoading) {
+      setPage(prev => prev + 1);
+    }
+  }, [page, totalPages, trendingLoading]);
   const { creators: popularCreatorsData, loading: creatorsLoading, refresh: refreshCreators } = usePopularCreators(20)
   const { currentTrack, isPlaying, playTrack, setCurrentPlaylist, favorites, favoritesLoading, addToFavorites, removeFromFavorites, addToQueue } = useAudioPlayer()
 
@@ -399,18 +412,9 @@ function ExploreContent() {
   }, [categoryParam])
   
   // Transform real tracks data to match existing interface
-  const allTracks: Track[] = trendingTracksData.map(track => ({
-    _id: track._id,
-    id: track._id, // Use the same ID for consistency
-    title: track.title,
-    artist: typeof track.creatorId === 'object' && track.creatorId !== null ? (track.creatorId as any).name : 'Unknown Artist',
-    plays: track.plays,
-    likes: track.likes,
-    coverImage: track.coverURL || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80',
-    coverURL: track.coverURL,
-    category: track.genre || 'afrobeat',
-    duration: ''
-  }));
+  // Note: This is now redundant since we're handling tracks in the useEffect above
+  // Keeping it for backward compatibility but it's not used in the current implementation
+  const existingTracks: Track[] = [];
 
   // Transform real creators data to match existing interface
   const allCreators: Creator[] = popularCreatorsData.map(creator => ({
@@ -650,7 +654,7 @@ function ExploreContent() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
                 {beats.map((beat) => (
-                  <div key={beat.id} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`beat-${beat.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={beat.coverImage || beat.coverURL || '/placeholder-track.png'} 
@@ -858,7 +862,7 @@ function ExploreContent() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
                 {albums.map((album) => (
-                  <div key={album.id} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`album-${album.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={album.coverImage || album.coverURL || '/placeholder-album.png'} 
@@ -970,7 +974,7 @@ function ExploreContent() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
                 {playlists.map((playlist) => (
-                  <div key={playlist.id} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`playlist-${playlist.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={playlist.tracks && playlist.tracks.length > 0 ? 
@@ -1085,7 +1089,7 @@ function ExploreContent() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
                 {filteredTracks.map((track) => (
-                  <div key={track.id} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`track-${track.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={track.coverImage || track.coverURL || '/placeholder-track.png'} 
@@ -1261,7 +1265,19 @@ function ExploreContent() {
                   </div>
                 ))}
               </div>
-            )}
+
+              )}{page < (totalPages || 1) && (
+                <div className="flex justify-center py-8">
+                  <button
+                    onClick={loadMore}
+                    disabled={trendingLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-[#FF4D67] to-[#FFCB2B] text-white rounded-full font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {trendingLoading ? 'Loading...' : 'Load More Tracks'}
+                  </button>
+                </div>
+              )}
+            )&rbrace;
           </>
         )}
 
@@ -1275,7 +1291,7 @@ function ExploreContent() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {filteredCreators.map((creator) => (
-                  <div key={creator.id} className="group card-bg rounded-2xl p-4 sm:p-6 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 cursor-pointer"
+                  <div key={`creator-${creator.id}`} className="group card-bg rounded-2xl p-4 sm:p-6 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 cursor-pointer"
                     onClick={() => {
                       // Navigate to the creator's profile page
                       router.push(`/artists/${creator.id}`);

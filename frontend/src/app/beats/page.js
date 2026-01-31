@@ -5,7 +5,7 @@ import { useTracksByType } from '../../hooks/useTracks';
 import { useAudioPlayer } from '../../contexts/AudioPlayerContext';
 export default function BeatsPage() {
     var _a;
-    const { tracks: allBeatTracks, loading: beatsLoading, refresh: refreshBeats } = useTracksByType('beat', 100);
+    const { tracks: allBeatTracks, loading: beatsLoading, refresh: refreshBeats } = useTracksByType('beat', 0); // 0 means no limit
     const { favorites, favoritesLoading, addToFavorites, removeFromFavorites, playTrack, setCurrentPlaylist } = useAudioPlayer();
     // State for tracking which tracks are favorited
     const [favoriteStatus, setFavoriteStatus] = useState({});

@@ -6,7 +6,7 @@ import { useAudioPlayer } from '../../contexts/AudioPlayerContext';
 export default function TracksPage() {
     const [activeTab, setActiveTab] = useState('trending');
     const [sortBy, setSortBy] = useState('popular');
-    const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } = useTrendingTracks(20);
+    const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } = useTrendingTracks(0); // 0 means no limit
     const { creators: popularCreatorsData, loading: creatorsLoading } = usePopularCreators(10);
     const { currentTrack, isPlaying, playTrack, setCurrentPlaylist, favorites, favoritesLoading, addToFavorites, removeFromFavorites, addToQueue } = useAudioPlayer();
     // State for tracking which tracks are favorited

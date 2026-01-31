@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../contexts/AuthContext";
@@ -59,14 +59,22 @@ const generateAvatar = (name: string) => {
 
 // Albums are now fetched directly from the API, so we don't need this function anymore
 export default function Home() {
+  const router = useRouter();
+  const { isAuthenticated, userRole } = useAuth();
+  
+  // Redirect admin users to admin dashboard immediately
+  if (isAuthenticated && userRole === "admin") {
+    console.log("Redirecting admin to /admin");
+    router.replace("/admin");
+    return null;
+  }
+  
   const [activeTab, setActiveTab] = useState<
     "trending" | "new" | "popular" | "beats" | "mixes"
   >("trending");
   const [currentSlide, setCurrentSlide] = useState(0);
-  const { isAuthenticated, userRole } = useAuth();
   const { currentTrack, isPlaying, playTrack, setCurrentPlaylist, favorites, favoritesLoading, addToFavorites, removeFromFavorites, addToQueue } =
     useAudioPlayer();
-  const router = useRouter();
 
   // State for tracking which tracks are favorited
   const [favoriteStatus, setFavoriteStatus] = useState<Record<string, boolean>>({});
@@ -126,22 +134,6 @@ export default function Home() {
     }
   };
 
-  // Redirect admin users to admin dashboard
-  useEffect(() => {
-    console.log("Checking admin redirect:", { isAuthenticated, userRole });
-    if (isAuthenticated && userRole === "admin") {
-      console.log("Redirecting admin to /admin");
-      router.replace("/admin");
-      return;
-    }
-  }, [isAuthenticated, userRole, router]);
-
-  // Don't render home page content for admin users
-  if (isAuthenticated && userRole === "admin") {
-    console.log("Rendering null for admin user");
-    return null;
-  }
-
   // Hero slider images
   const heroSlides = [
     {
@@ -171,16 +163,81 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch real trending tracks
-  const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } =
-    useTrendingTracks(10);
+  // Use pagination for lazy loading
+  const [page, setPage] = useState(1);
+  const [allTracks, setAllTracks] = useState<Track[]>([]);
+  const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks, total: totalTracks, pages: totalPages } =
+    useTrendingTracks(20, page); // Load 20 tracks per page
+
+  // Handle infinite scroll
+  useEffect(() => {
+    if (trendingTracksData.length > 0 && !trendingLoading) {
+      const newTracks: Track[] = trendingTracksData.map(track => ({
+        id: track._id,
+        title: track.title || 'Untitled Track',
+        artist: typeof track.creatorId === "object" && track.creatorId !== null
+          ? (track.creatorId as any).name
+          : "Unknown Artist",
+        album: track.albumId?.title || "", // Use actual album title if available
+        plays: track.plays || 0,
+        likes: track.likes || 0,
+        coverImage: track.coverURL || "",
+        duration: track.duration || "",
+        category: track.type || 'song',
+        type: (track.type as 'song' | 'beat' | 'mix') || 'song',
+        paymentType: track.paymentType,
+        creatorId: typeof track.creatorId === "object" && track.creatorId !== null
+          ? (track.creatorId as any)._id
+          : track.creatorId,
+        audioUrl: track.audioURL || "", // Ensure audio URL is included
+      }));
+      setAllTracks(prev => [...prev, ...newTracks]);
+    }
+  }, [trendingTracksData, trendingLoading]);
+
+  const loadMore = useCallback(() => {
+    if (page < (totalPages || 1) && !trendingLoading) {
+      setPage(prev => prev + 1);
+    }
+  }, [page, totalPages, trendingLoading]);
 
   // Fetch real popular creators
   const { creators: popularCreatorsData, loading: creatorsLoading } =
     usePopularCreators(6);
 
+// Helper function to remove duplicate tracks by ID
+  const removeDuplicateTracks = (tracks: Track[]): Track[] => {
+    const seen = new Set<string>();
+    return tracks.filter(track => {
+      if (seen.has(track.id)) {
+        return false;
+      }
+      seen.add(track.id);
+      return true;
+    });
+  };
+
+  // Helper function to remove duplicate ITrack items by _id
+  const removeDuplicateITracks = (tracks: any[]): any[] => {
+    const seen = new Set<string>();
+    return tracks.filter(track => {
+      if (seen.has(track._id)) {
+        return false;
+      }
+      seen.add(track._id);
+      return true;
+    });
+  };
+
   // Fetch beat tracks specifically (since trending excludes beats)
-  const { tracks: beatTracksData, loading: beatsLoading } = useTracksByType('beat', 20);
+  const { tracks: beatTracksData, loading: beatsLoading } = useTracksByType('beat', 0); // 0 means no limit
+  
+  // Memoized sorted beat tracks for Popular Beats section
+  // Memoized sorted beat tracks for Popular Beats section
+  const sortedBeatTracks = useMemo(() => {
+    const sorted = [...beatTracksData].sort((a, b) => (b.plays || 0) - (a.plays || 0));
+    return removeDuplicateITracks(sorted);
+  }, [beatTracksData]);
 
   // Listen for track updates (when favorites are added/removed)
   useEffect(() => {
@@ -229,24 +286,8 @@ export default function Home() {
     };
   }, []);
 
-  // Transform tracks data to match existing interface
-  const trendingTracks: Track[] = trendingTracksData.map((track) => ({
-    id: track._id,
-    title: track.title,
-    artist:
-      typeof track.creatorId === "object" && track.creatorId !== null
-        ? (track.creatorId as any).name
-        : "Unknown Artist",
-    album: "",
-    plays: track.plays,
-    likes: track.likes,
-    coverImage: track.coverURL || "", // Preserve empty values so we can show fallback in UI
-    duration: "",
-    category: track.type,
-    type: track.type, // Add type field for beat identification
-    paymentType: track.paymentType, // Add payment type for beat pricing
-    creatorId: typeof track.creatorId === 'object' && track.creatorId !== null ? (track.creatorId as any)._id : track.creatorId
-  }));
+  // Use all tracks from infinite scroll
+  const trendingTracks: Track[] = useMemo(() => removeDuplicateTracks(allTracks), [allTracks]);
 
   // For now, use trending tracks for new tracks as well
   const newTracks: Track[] = trendingTracks;
@@ -335,26 +376,94 @@ export default function Home() {
     return newArray;
   };
 
-  // Made for You section - for now use shuffled trending tracks, but in the future this could be personalized
-  const madeForYouTracks: Track[] = shuffleArray([...trendingTracks]).slice(0, 10);
 
-  // Popular Songs section - use tracks with highest play counts
-  const popularSongs: Track[] = [...trendingTracks].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 10);
 
-  // New Releases section - for now use most recent tracks, in the future this could come from a dedicated endpoint
-  const newReleases: Track[] = [...trendingTracks].reverse().slice(0, 10);
+  // Helper function to get tracks by taking the first N unique tracks
+  const getUniqueTracks = (tracks: Track[], _usedTrackIds: Set<string>, count: number): Track[] => {
+    // We ignore usedTrackIds to allow tracks to appear in multiple sections
+    // Just return the first 'count' tracks from the sorted list
+    return tracks.slice(0, count);
+  };
 
-  // Rising Tracks - tracks with increasing engagement
-  const risingTracks: Track[] = [...trendingTracks].sort((a, b) => (b.likes || 0) - (a.likes || 0)).slice(0, 10);
+  // Made for You section - use a mix of liked and recently added tracks for personalization
+  const madeForYouTracks: Track[] = useMemo(() => {
+    const sortedTracks = [...trendingTracks].sort((a, b) => {
+      // Weight by likes and recency, assuming newer tracks might be more relevant
+      const aScore = (a.likes || 0) * 2 + (a.plays || 0) * 0.5;
+      const bScore = (b.likes || 0) * 2 + (b.plays || 0) * 0.5;
+      return bScore - aScore;
+    });
+    const uniqueSortedTracks = removeDuplicateTracks(sortedTracks);
+    return uniqueSortedTracks.slice(0, 10);
+  }, [trendingTracks]);
 
-  // Based on Your Listening - personalized recommendations
-  const basedOnListening: Track[] = shuffleArray([...trendingTracks]).slice(0, 10);
+  // Popular Songs section - use tracks with highest play counts and engagement
+  const popularSongs: Track[] = useMemo(() => {
+    const sortedTracks = [...trendingTracks].sort((a, b) => {
+      // Combine plays with engagement (likes) for popularity
+      const aPopularity = (a.plays || 0) * 0.7 + (a.likes || 0) * 0.3;
+      const bPopularity = (b.plays || 0) * 0.7 + (b.likes || 0) * 0.3;
+      return bPopularity - aPopularity;
+    });
+    const uniqueSortedTracks = removeDuplicateTracks(sortedTracks);
+    return uniqueSortedTracks.slice(0, 10);
+  }, [trendingTracks]);
 
-  // Continue Listening - tracks user has recently played
-  const continueListening: Track[] = [...trendingTracks].slice(0, 10);
+  // New Releases section - prioritize recently added tracks
+  const newReleases: Track[] = useMemo(() => {
+    // Since we don't have explicit date information in the Track interface,
+    // we'll reverse the order to show newest tracks first (assuming last in array are newest)
+    const reversedTracks = [...trendingTracks].reverse();
+    const uniqueSortedTracks = removeDuplicateTracks(reversedTracks);
+    return uniqueSortedTracks.slice(0, 10);
+  }, [trendingTracks]);
 
-  // Similar to Liked Songs - tracks similar to user's favorites
-  const similarToLiked: Track[] = [...trendingTracks].sort((a, b) => (b.likes || 0) - (a.likes || 0)).slice(0, 10);
+  // Rising Tracks - tracks with increasing engagement (high likes relative to plays)
+  const risingTracks: Track[] = useMemo(() => {
+    const sortedTracks = [...trendingTracks].sort((a, b) => {
+      // Calculate engagement rate: likes relative to plays
+      const aEngagement = a.plays ? (a.likes || 0) / a.plays : (a.likes || 0);
+      const bEngagement = b.plays ? (b.likes || 0) / b.plays : (b.likes || 0);
+      return bEngagement - aEngagement;
+    });
+    const uniqueSortedTracks = removeDuplicateTracks(sortedTracks);
+    return uniqueSortedTracks.slice(0, 10);
+  }, [trendingTracks]);
+
+  // Based on Your Listening - personalized recommendations based on variety
+  const basedOnListening: Track[] = useMemo(() => {
+    // Use a weighted algorithm that balances plays, likes, and other factors
+    const sortedTracks = [...trendingTracks].sort((a, b) => {
+      // Calculate a score based on multiple factors
+      const aDurationNum = typeof a.duration === 'string' ? (a.duration.includes(':') ? parseFloat(a.duration.split(':')[0]) * 60 + parseFloat(a.duration.split(':')[1]) : parseFloat(a.duration)) : (a.duration || 0);
+      const bDurationNum = typeof b.duration === 'string' ? (b.duration.includes(':') ? parseFloat(b.duration.split(':')[0]) * 60 + parseFloat(b.duration.split(':')[1]) : parseFloat(b.duration)) : (b.duration || 0);
+      const aScore = (a.plays || 0) * 0.4 + (a.likes || 0) * 0.4 + (aDurationNum ? Math.min(aDurationNum, 300) * 0.2 : 0); // Duration weight for song length
+      const bScore = (b.plays || 0) * 0.4 + (b.likes || 0) * 0.4 + (bDurationNum ? Math.min(bDurationNum, 300) * 0.2 : 0);
+      return bScore - aScore;
+    });
+    const uniqueSortedTracks = removeDuplicateTracks(sortedTracks);
+    return uniqueSortedTracks.slice(0, 10);
+  }, [trendingTracks]);
+
+  // Continue Listening - tracks with recent activity and high engagement
+  const continueListening: Track[] = useMemo(() => {
+    // Prioritize tracks with recent activity indicators
+    const sortedTracks = [...trendingTracks].sort((a, b) => {
+      // Weight recent interactions - assuming tracks with recent likes or plays are more relevant
+      const aRecency = (a.likes || 0) * 0.6 + (a.plays || 0) * 0.4;
+      const bRecency = (b.likes || 0) * 0.6 + (b.plays || 0) * 0.4;
+      return bRecency - aRecency;
+    });
+    const uniqueSortedTracks = removeDuplicateTracks(sortedTracks);
+    return uniqueSortedTracks.slice(0, 10);
+  }, [trendingTracks]);
+
+  // Similar to Liked Songs - tracks similar to user's favorites (highly liked tracks)
+  const similarToLiked: Track[] = useMemo(() => {
+    const sortedTracks = [...trendingTracks].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    const uniqueSortedTracks = removeDuplicateTracks(sortedTracks);
+    return uniqueSortedTracks.slice(0, 10);
+  }, [trendingTracks]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black relative overflow-hidden">
@@ -758,7 +867,7 @@ export default function Home() {
           <div className="grid grid-cols-[repeat(auto-fill,_minmax(250px,_1fr))] gap-4 sm:gap-6 md:gap-6">
             {forYouTracks.map((track) => (
               <div
-                key={track.id}
+                key={`foryou-${track.id}`}
                 className="group card-bg rounded-xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
               >
                 <div className="relative">
@@ -974,6 +1083,19 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Infinite Scroll Trigger */}
+        {page < (totalPages || 1) && (
+          <div className="flex justify-center py-8">
+            <button
+              onClick={loadMore}
+              disabled={trendingLoading}
+              className="px-6 py-3 bg-gradient-to-r from-[#FF4D67] to-[#FFCB2B] text-white rounded-full font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {trendingLoading ? 'Loading...' : 'Load More Tracks'}
+            </button>
+          </div>
+        )}
+
         {/* Made for You Section */}
         <HorizontalScrollSection title="Made for You" viewAllLink="/foryou">
           {madeForYouTracks.map((track) => {
@@ -981,7 +1103,7 @@ export default function Home() {
             const fullTrack = trendingTracksData.find(t => t._id === track.id);
             return (
               <TrackCard 
-                key={track.id} 
+                key={`made-for-you-${track.id}`} 
                 track={track} 
                 fullTrackData={fullTrack}
               />
@@ -999,7 +1121,7 @@ export default function Home() {
             const fullTrack = trendingTracksData.find(t => t._id === track.id);
             return (
               <TrackCard 
-                key={track.id} 
+                key={`popular-${track.id}`} 
                 track={track} 
                 fullTrackData={fullTrack}
               />
@@ -1009,7 +1131,7 @@ export default function Home() {
 
         {/* Popular Beats Section - Horizontal Scroll */}
         <HorizontalScrollSection title="Popular Beats" viewAllLink="/beats?sortBy=popularity">
-          {beatTracksData.slice(0, 15).map((track) => {
+          {sortedBeatTracks.slice(0, 15).map((track) => {
             return (
               <TrackCard 
                 key={`beat-${track._id}`} 
@@ -1020,6 +1142,9 @@ export default function Home() {
                     ? (track.creatorId as any).name 
                     : "Unknown Artist",
                   coverImage: track.coverURL || '',
+                  plays: track.plays,
+                  likes: track.likes,
+                  duration: track.duration,
                   audioUrl: track.audioURL || '',
                   creatorId: typeof track.creatorId === 'object' && track.creatorId !== null 
                     ? (track.creatorId as any)._id 
@@ -1045,7 +1170,7 @@ export default function Home() {
             const fullTrack = trendingTracksData.find(t => t._id === track.id);
             return (
               <TrackCard 
-                key={track.id} 
+                key={`new-releases-${track.id}`} 
                 track={track} 
                 fullTrackData={fullTrack}
               />
@@ -1060,7 +1185,7 @@ export default function Home() {
             const fullTrack = trendingTracksData.find(t => t._id === track.id);
             return (
               <TrackCard 
-                key={track.id} 
+                key={`rising-${track.id}`} 
                 track={track} 
                 fullTrackData={fullTrack}
               />
@@ -1075,7 +1200,7 @@ export default function Home() {
             const fullTrack = trendingTracksData.find(t => t._id === track.id);
             return (
               <TrackCard 
-                key={track.id} 
+                key={`listening-${track.id}`} 
                 track={track} 
                 fullTrackData={fullTrack}
               />
@@ -1090,7 +1215,7 @@ export default function Home() {
             const fullTrack = trendingTracksData.find(t => t._id === track.id);
             return (
               <TrackCard 
-                key={track.id} 
+                key={`continue-listening-${track.id}`} 
                 track={track} 
                 fullTrackData={fullTrack}
               />
@@ -1105,7 +1230,7 @@ export default function Home() {
             const fullTrack = trendingTracksData.find(t => t._id === track.id);
             return (
               <TrackCard 
-                key={track.id} 
+                key={`similar-liked-${track.id}`} 
                 track={track} 
                 fullTrackData={fullTrack}
               />
@@ -1276,161 +1401,25 @@ export default function Home() {
 
 
 
-        {/* Popular Mixes Section */}
-        <section className="px-4 md:px-6 py-8 sm:py-10">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-white">
-              Popular Mixes
-            </h2>
-            <a
-              href="/tracks?category=mixes"
-              className="text-[#FF4D67] hover:text-[#FFCB2B] text-sm sm:text-base transition-colors"
-            >
-              View All
-            </a>
-          </div>
-
-          <div className="grid grid-cols-[repeat(auto-fill,_minmax(250px,_1fr))] gap-4 md:gap-6">
-            {trendingTracks
-              .filter((track) => track.category === "mix")
-              .slice(0, 6)
-              .map((track) => (
-                <div
-                  key={track.id}
-                  className="group card-bg rounded-xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
-                >
-                  <div className="relative">
-                    {track.coverImage && track.coverImage.trim() !== '' ? (
-                      <img
-                        src={track.coverImage}
-                        alt={track.title}
-                        className="w-full aspect-square object-cover"
-                      />
-                    ) : (
-                      <div className="w-full aspect-square bg-gradient-to-br from-[#FF4D67] to-[#FFCB2B] flex items-center justify-center">
-                        <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
-                        </svg>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button
-                        onClick={() => {
-                          // Find the full track object to get the audioURL
-                          const fullTrack = trendingTracksData.find(
-                            (t) => t._id === track.id,
-                          );
-                          if (fullTrack && fullTrack.audioURL) {
-                            playTrack({
-                              id: track.id,
-                              title: track.title,
-                              artist: track.artist,
-                              coverImage: track.coverImage,
-                              audioUrl: fullTrack.audioURL,
-                              creatorId: typeof fullTrack.creatorId === 'object' && fullTrack.creatorId !== null ? (fullTrack.creatorId as any)._id : fullTrack.creatorId,
-                              type: fullTrack.type, // Include track type for WhatsApp functionality
-                              paymentType: fullTrack.paymentType, // Include payment type for beat pricing
-                              price: fullTrack.price, // Include price for paid beats
-                              currency: fullTrack.currency, // Include currency for paid beats
-                              creatorWhatsapp: (typeof fullTrack.creatorId === 'object' && fullTrack.creatorId !== null 
-                                ? (fullTrack.creatorId as any).whatsappContact 
-                                : undefined) // Include creator's WhatsApp contact
-                            });
-
-                            // Set the current playlist to all trending tracks
-                            const playlistTracks = trendingTracksData
-                              .filter((t) => t.audioURL) // Only tracks with audio
-                              .map((t) => ({
-                                id: t._id,
-                                title: t.title,
-                                artist:
-                                  typeof t.creatorId === "object" &&
-                                  t.creatorId !== null
-                                    ? (t.creatorId as any).name
-                                    : "Unknown Artist",
-                                coverImage:
-                                  t.coverURL ||
-                                  "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80",
-                                audioUrl: t.audioURL,
-                                creatorId: typeof t.creatorId === 'object' && t.creatorId !== null ? (t.creatorId as any)._id : t.creatorId,
-                                type: t.type, // Include track type for WhatsApp functionality
-                                paymentType: t.paymentType, // Include payment type for beat pricing
-                                price: t.price, // Include price for paid beats
-                                currency: t.currency, // Include currency for paid beats
-                                creatorWhatsapp: (typeof t.creatorId === 'object' && t.creatorId !== null 
-                                  ? (t.creatorId as any).whatsappContact 
-                                  : undefined) // Include creator's WhatsApp contact
-                              }));
-                            setCurrentPlaylist(playlistTracks);
-                          }
-                        }}
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full gradient-primary flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300"
-                      >
-                        {currentTrack?.id === track.id && isPlaying ? (
-                          <svg
-                            className="w-4 h-4 sm:w-5 sm:h-5"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-4 h-4 sm:w-5 sm:h-5"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-3">
-                    <h3 className="font-bold text-white text-sm sm:text-base mb-1 truncate">
-                      {track.title}
-                    </h3>
-                    <p className="text-gray-400 text-xs sm:text-sm truncate">
-                      {track.artist}
-                    </p>
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-gray-500 text-xs">
-                        {track.duration}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <svg
-                          className="w-3 h-3 sm:w-4 sm:h-4 text-[#FF4D67]"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
-                            clipRule="evenodd"
-                          ></path>
-                        </svg>
-                        <span className="text-gray-500 text-xs">
-                          {track.likes}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </section>
+        {/* Popular Mixes Section - Horizontal Scroll */}
+        <HorizontalScrollSection title="Popular Mixes" viewAllLink="/tracks?category=mixes">
+          {trendingTracks
+            .filter((track) => track.category === "mix")
+            .slice(0, 6)
+            .map((track) => {
+              // Find the full track object to get additional properties
+              const fullTrack = trendingTracksData.find(t => t._id === track.id);
+              return (
+                <TrackCard 
+                  key={`popular-mixes-${track.id}`} 
+                  track={track} 
+                  fullTrackData={fullTrack}
+                />
+              );
+            })}
+          </HorizontalScrollSection>
+          
+          {/* Music Lists */}
 
         {/* Music Lists */}
         <section className="px-4 md:px-6 py-8 sm:py-10 pb-8">
@@ -1515,7 +1504,7 @@ export default function Home() {
             <div className="grid grid-cols-[repeat(auto-fill,_minmax(250px,_1fr))] gap-4 sm:gap-6 md:gap-6">
               {trendingTracks.map((track) => (
                 <div
-                  key={track.id}
+                  key={`trending-tab-${track.id}`}
                   className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                 >
                   <div className="relative">
@@ -1524,20 +1513,46 @@ export default function Home() {
                         src={track.coverImage}
                         alt={track.title}
                         className="w-full h-40 sm:h-48 object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null; // Prevent infinite loop
+                          target.style.display = 'none';
+                          // Show fallback content
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.image-fallback');
+                            if (fallback) {
+                              fallback.classList.remove('hidden');
+                            }
+                          }
+                        }}
+                        onLoad={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.image-fallback');
+                            if (fallback) {
+                              fallback.classList.add('hidden');
+                            }
+                          }
+                        }}
                       />
-                    ) : (
-                      <div className="w-full h-40 sm:h-48 bg-gradient-to-br from-[#FF4D67] to-[#FFCB2B] flex items-center justify-center">
-                        <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
-                        </svg>
-                      </div>
-                    )}
+                    ) : null}
+                    <div className="image-fallback absolute inset-0 bg-gradient-to-br from-[#FF4D67] to-[#FFCB2B] flex items-center justify-center w-full h-40 sm:h-48">
+                      <span className="text-2xl font-bold text-white">
+                        {track.title && track.title.trim().length > 0
+                          ? track.title.trim().charAt(0).toUpperCase()
+                          : '?'}
+                      </span>
+                    </div>
+                    
+                    {/* Play Button Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <button
                         onClick={() => {
                           // Find the full track object to get the audioURL
                           const fullTrack = trendingTracksData.find(
-                            (t) => t._id === track.id,
+                            (t) => t._id === track.id
                           );
                           if (fullTrack && fullTrack.audioURL) {
                             playTrack({
@@ -1555,13 +1570,11 @@ export default function Home() {
                               .map((t) => ({
                                 id: t._id,
                                 title: t.title,
-                                artist:
-                                  typeof t.creatorId === "object" &&
+                                artist: typeof t.creatorId === "object" &&
                                   t.creatorId !== null
-                                    ? (t.creatorId as any).name
-                                    : "Unknown Artist",
-                                coverImage:
-                                  t.coverURL ||
+                                  ? (t.creatorId as any).name
+                                  : "Unknown Artist",
+                                coverImage: t.coverURL ||
                                   "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80",
                                 audioUrl: t.audioURL,
                                 creatorId: typeof t.creatorId === 'object' && t.creatorId !== null ? (t.creatorId as any)._id : t.creatorId
@@ -1570,6 +1583,7 @@ export default function Home() {
                           }
                         }}
                         className="w-12 h-12 sm:w-14 sm:h-14 rounded-full gradient-primary flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300"
+                        disabled={!trendingTracksData.find(t => t._id === track.id)?.audioURL}
                       >
                         {currentTrack?.id === track.id && isPlaying ? (
                           <svg
@@ -1600,8 +1614,10 @@ export default function Home() {
                         )}
                       </button>
                     </div>
+                    
+                    {/* Favorite Button */}
                     <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           // Find the full track object
@@ -1612,11 +1628,11 @@ export default function Home() {
                         }}
                         className="p-1.5 sm:p-2 rounded-full bg-black/30 backdrop-blur-sm text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                       >
-                        <svg 
+                        <svg
                           className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-200 ${favoriteStatus[track.id] ? 'text-red-500 fill-current scale-110' : 'stroke-current'}`}
                           fill={favoriteStatus[track.id] ? "currentColor" : "none"}
                           stroke="currentColor"
-                          viewBox="0 0 24 24" 
+                          viewBox="0 0 24 24"
                           xmlns="http://www.w3.org/2000/svg"
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
@@ -1624,22 +1640,26 @@ export default function Home() {
                       </button>
                     </div>
                   </div>
-
+                  
+                  {/* Track Info */}
                   <div className="p-4 sm:p-5">
-                    <h3 className="font-bold text-white text-lg mb-1 truncate">
-                      {track.title}
+                    <h3 className="font-bold text-white text-lg mb-1 truncate" title={track.title}>
+                      {track.title || 'Untitled Track'}
                     </h3>
-                    <p className="text-gray-400 text-sm sm:text-base mb-1 truncate">
-                      {track.artist}
+                    <p className="text-gray-400 text-sm sm:text-base mb-1 truncate" title={track.artist}>
+                      {track.artist || 'Unknown Artist'}
                     </p>
-                    {track.album && (
-                      <p className="text-gray-500 text-xs sm:text-sm mb-3 truncate">
+                    
+                    {/* Album info - only show if album exists and is not empty */}
+                    {track.album && track.album.trim() !== '' && (
+                      <p className="text-gray-500 text-xs sm:text-sm mb-3 truncate" title={track.album}>
                         {track.album}
                       </p>
                     )}
-
+                    
+                    {/* Stats */}
                     <div className="flex justify-between text-xs sm:text-sm text-gray-500">
-                      <span>{track.plays.toLocaleString()} plays</span>
+                      <span>{(track.plays || 0).toLocaleString()} plays</span>
                       <div className="flex items-center gap-1">
                         <svg
                           className="w-3 h-3 sm:w-4 sm:h-4"
@@ -1653,7 +1673,7 @@ export default function Home() {
                             clipRule="evenodd"
                           ></path>
                         </svg>
-                        <span>{track.likes}</span>
+                        <span>{track.likes || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -1666,8 +1686,8 @@ export default function Home() {
           {activeTab === "new" && (
             <div className="grid grid-cols-[repeat(auto-fill,_minmax(250px,_1fr))] gap-4 sm:gap-6 md:gap-6">
               {newTracks.map((track) => (
-                <div
-                  key={track.id}
+                <><div
+                  key={`new-releases-tab-${track.id}`}
                   className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                 >
                   <div className="relative">
@@ -1676,108 +1696,128 @@ export default function Home() {
                         src={track.coverImage}
                         alt={track.title}
                         className="w-full h-40 sm:h-48 object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-40 sm:h-48 bg-gradient-to-br from-[#FF4D67] to-[#FFCB2B] flex items-center justify-center">
-                        <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
-                        </svg>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button
-                        onClick={() => {
-                          // Find the full track object to get the audioURL
-                          const fullTrack = trendingTracksData.find(
-                            (t) => t._id === track.id,
-                          );
-                          if (fullTrack && fullTrack.audioURL) {
-                            playTrack({
-                              id: track.id,
-                              title: track.title,
-                              artist: track.artist,
-                              coverImage: track.coverImage,
-                              audioUrl: fullTrack.audioURL,
-                              creatorId: typeof fullTrack.creatorId === 'object' && fullTrack.creatorId !== null ? (fullTrack.creatorId as any)._id : fullTrack.creatorId
-                            });
-
-                            // Set the current playlist to all trending tracks
-                            const playlistTracks = trendingTracksData
-                              .filter((t) => t.audioURL) // Only tracks with audio
-                              .map((t) => ({
-                                id: t._id,
-                                title: t.title,
-                                artist:
-                                  typeof t.creatorId === "object" &&
-                                  t.creatorId !== null
-                                    ? (t.creatorId as any).name
-                                    : "Unknown Artist",
-                                coverImage:
-                                  t.coverURL ||
-                                  "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80",
-                                audioUrl: t.audioURL,
-                                creatorId: typeof t.creatorId === 'object' && t.creatorId !== null ? (t.creatorId as any)._id : t.creatorId
-                              }));
-                            setCurrentPlaylist(playlistTracks);
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null; // Prevent infinite loop
+                          target.style.display = 'none';
+                          // Show fallback content
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.image-fallback');
+                            if (fallback) {
+                              fallback.classList.remove('hidden');
+                            }
                           }
-                        }}
-                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full gradient-primary flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300"
-                      >
-                        {currentTrack?.id === track.id && isPlaying ? (
-                          <svg
-                            className="w-5 h-5 sm:w-6 sm:h-6"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-5 h-5 sm:w-6 sm:h-6"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                    <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Find the full track object
-                          const fullTrack = trendingTracksData.find(t => t._id === track.id);
-                          if (fullTrack) {
-                            toggleFavorite(track.id, fullTrack);
+                        } }
+                        onLoad={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.image-fallback');
+                            if (fallback) {
+                              fallback.classList.add('hidden');
+                            }
                           }
-                        }}
-                        className="p-1.5 sm:p-2 rounded-full bg-black/30 backdrop-blur-sm text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
-                      >
-                        <svg 
-                          className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-200 ${favoriteStatus[track.id] ? 'text-red-500 fill-current scale-110' : 'stroke-current'}`}
-                          fill={favoriteStatus[track.id] ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          viewBox="0 0 24 24" 
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                        </svg>
-                      </button>
+                        } } />
+                    ) : null}
+                    <div className="image-fallback absolute inset-0 bg-gradient-to-br from-[#FF4D67] to-[#FFCB2B] flex items-center justify-center w-full h-40 sm:h-48">
+                      <span className="text-2xl font-bold text-white">
+                        {track.title && track.title.trim().length > 0
+                          ? track.title.trim().charAt(0).toUpperCase()
+                          : '?'}
+                      </span>
                     </div>
                   </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button
+                      onClick={() => {
+                        // Find the full track object to get the audioURL
+                        const fullTrack = trendingTracksData.find(
+                          (t) => t._id === track.id
+                        );
+                        if (fullTrack && fullTrack.audioURL) {
+                          playTrack({
+                            id: track.id,
+                            title: track.title,
+                            artist: track.artist,
+                            coverImage: track.coverImage,
+                            audioUrl: fullTrack.audioURL,
+                            creatorId: typeof fullTrack.creatorId === 'object' && fullTrack.creatorId !== null ? (fullTrack.creatorId as any)._id : fullTrack.creatorId
+                          });
 
-                  <div className="p-4 sm:p-5">
+                          // Set the current playlist to all trending tracks
+                          const playlistTracks = trendingTracksData
+                            .filter((t) => t.audioURL) // Only tracks with audio
+                            .map((t) => ({
+                              id: t._id,
+                              title: t.title,
+                              artist: typeof t.creatorId === "object" &&
+                                t.creatorId !== null
+                                ? (t.creatorId as any).name
+                                : "Unknown Artist",
+                              coverImage: t.coverURL ||
+                                "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80",
+                              audioUrl: t.audioURL,
+                              creatorId: typeof t.creatorId === 'object' && t.creatorId !== null ? (t.creatorId as any)._id : t.creatorId
+                            }));
+                          setCurrentPlaylist(playlistTracks);
+                        }
+                      } }
+                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-full gradient-primary flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300"
+                    >
+                      {currentTrack?.id === track.id && isPlaying ? (
+                        <svg
+                          className="w-5 h-5 sm:w-6 sm:h-6"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          ></path>
+                        </svg>
+                      ) : (
+                        <svg
+                          className="w-5 h-5 sm:w-6 sm:h-6"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                            clipRule="evenodd"
+                          ></path>
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Find the full track object
+                        const fullTrack = trendingTracksData.find(t => t._id === track.id);
+                        if (fullTrack) {
+                          toggleFavorite(track.id, fullTrack);
+                        }
+                      } }
+                      className="p-1.5 sm:p-2 rounded-full bg-black/30 backdrop-blur-sm text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                    >
+                      <svg
+                        className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-200 ${favoriteStatus[track.id] ? 'text-red-500 fill-current scale-110' : 'stroke-current'}`}
+                        fill={favoriteStatus[track.id] ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div><div className="p-4 sm:p-5">
                     <h3 className="font-bold text-white text-lg mb-1 truncate">
                       {track.title}
                     </h3>
@@ -1808,8 +1848,7 @@ export default function Home() {
                         <span>{track.likes}</span>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </div></>
               ))}
             </div>
           )}
@@ -2138,10 +2177,10 @@ export default function Home() {
           {activeTab === "mixes" && (
             <div className="grid grid-cols-[repeat(auto-fill,_minmax(250px,_1fr))] gap-4 sm:gap-6 md:gap-6">
               {trendingTracks
-                .filter((track) => track.category === "mix")
-                .map((track) => (
+                .filter((track: Track) => track.category === "mix")
+                .map((track: Track) => (
                   <div
-                    key={track.id}
+                    key={`mixes-tab-${track.id}`}
                     className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                   >
                     <div className="relative">
@@ -2294,7 +2333,7 @@ export default function Home() {
 
         {/* Removed duplicate footer - using global Footer component instead */}
           <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <><div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <div className="col-span-1 md:col-span-2">
                 <div className="mb-4 flex items-center">
                   <img src="/muzikax.png" alt="MuzikaX Logo" className="h-8 w-auto" />
@@ -2440,13 +2479,12 @@ export default function Home() {
                 </ul>
               </div>
             </div>
-
             <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">
-              <p>
-                &copy; 2024 MuzikaX. All rights reserved. Made with ❤️ for
-                Rwandan Music.
-              </p>
-            </div>
+                <p>
+                  &copy; 2024 MuzikaX. All rights reserved. Made with ❤️ for
+                  Rwandan Music.
+                </p>
+              </div></>
           </div>
         
       </main>

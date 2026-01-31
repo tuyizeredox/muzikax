@@ -408,13 +408,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = !!user
   const userRole = user?.role || null
-  
-  useEffect(() => {
-    // Only log in the browser
-    if (typeof window !== 'undefined') {
-      console.log('AuthContext values:', { user, isAuthenticated, userRole, isLoading });
-    }
-  }, [user, isAuthenticated, userRole, isLoading]);
 
   return (
     <AuthContext.Provider value={{ user, login, logout, upgradeToCreator, updateProfile, updateWhatsAppContact, fetchUserProfile, isAuthenticated, userRole, isLoading }}>

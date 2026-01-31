@@ -7,6 +7,9 @@ interface UseTracksResult {
   loading: boolean;
   error: string | null;
   refresh: () => void;
+  total?: number;
+  page?: number;
+  pages?: number;
 }
 
 interface UseCreatorsResult {
@@ -42,17 +45,21 @@ export const useAllTracks = (page: number = 1, limit: number = 10): UseTracksRes
   return { tracks, loading, error, refresh: fetchTracks };
 };
 
-export const useTrendingTracks = (limit: number = 10): UseTracksResult => {
+export const useTrendingTracks = (limit: number = 10, page: number = 1): UseTracksResult => {
   const [tracks, setTracks] = useState<ITrack[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [total, setTotal] = useState<number>(0);
+  const [pages, setPages] = useState<number>(0);
 
   const fetchTracks = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchTrendingTracks(limit);
-      setTracks(data);
+      const data = await fetchAllTracks(page, limit);
+      setTracks(data.tracks);
+      setTotal(data.total);
+      setPages(data.pages);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch trending tracks');
       console.error('Error fetching trending tracks:', err);
@@ -63,9 +70,9 @@ export const useTrendingTracks = (limit: number = 10): UseTracksResult => {
 
   useEffect(() => {
     fetchTracks();
-  }, [limit]);
+  }, [limit, page]);
 
-  return { tracks, loading, error, refresh: fetchTracks };
+  return { tracks, loading, error, refresh: fetchTracks, total, page, pages };
 };
 
 export const usePopularCreators = (limit: number = 10): UseCreatorsResult => {

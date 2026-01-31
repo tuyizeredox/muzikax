@@ -52,14 +52,22 @@ const generateAvatar = (name: string) => {
 
 // Albums are now fetched directly from the API, so we don't need this function anymore
 export default function Home() {
+  const router = useRouter();
+  const { isAuthenticated, userRole } = useAuth();
+  
+  // Redirect admin users to admin dashboard immediately
+  if (isAuthenticated && userRole === "admin") {
+    console.log("Redirecting admin to /admin");
+    router.replace("/admin");
+    return null;
+  }
+  
   const [activeTab, setActiveTab] = useState<
     "trending" | "new" | "popular" | "mixes"
   >("trending");
   const [currentSlide, setCurrentSlide] = useState(0);
-  const { isAuthenticated, userRole } = useAuth();
   const { currentTrack, isPlaying, playTrack, setCurrentPlaylist, favorites, favoritesLoading, addToFavorites, removeFromFavorites } =
     useAudioPlayer();
-  const router = useRouter();
 
   // State for tracking which tracks are favorited
   const [favoriteStatus, setFavoriteStatus] = useState<Record<string, boolean>>({});
@@ -116,22 +124,6 @@ export default function Home() {
     }
   };
 
-  // Redirect admin users to admin dashboard
-  useEffect(() => {
-    console.log("Checking admin redirect:", { isAuthenticated, userRole });
-    if (isAuthenticated && userRole === "admin") {
-      console.log("Redirecting admin to /admin");
-      router.replace("/admin");
-      return;
-    }
-  }, [isAuthenticated, userRole, router]);
-
-  // Don't render home page content for admin users
-  if (isAuthenticated && userRole === "admin") {
-    console.log("Rendering null for admin user");
-    return null;
-  }
-
   // Hero slider images
   const heroSlides = [
     {
@@ -163,7 +155,7 @@ export default function Home() {
 
   // Fetch real trending tracks
   const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } =
-    useTrendingTracks(10);
+    useTrendingTracks(0); // 0 means no limit - get all tracks
   
 
 

@@ -24,16 +24,20 @@ export const useAllTracks = (page = 1, limit = 10) => {
     }, [page, limit]);
     return { tracks, loading, error, refresh: fetchTracks };
 };
-export const useTrendingTracks = (limit = 10) => {
+export const useTrendingTracks = (limit = 10, page = 1) => {
     const [tracks, setTracks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [total, setTotal] = useState(0);
+    const [pages, setPages] = useState(0);
     const fetchTracks = async () => {
         try {
             setLoading(true);
             setError(null);
-            const data = await fetchTrendingTracks(limit);
-            setTracks(data);
+            const data = await fetchAllTracks(page, limit);
+            setTracks(data.tracks);
+            setTotal(data.total);
+            setPages(data.pages);
         }
         catch (err) {
             setError(err.message || 'Failed to fetch trending tracks');
@@ -45,8 +49,8 @@ export const useTrendingTracks = (limit = 10) => {
     };
     useEffect(() => {
         fetchTracks();
-    }, [limit]);
-    return { tracks, loading, error, refresh: fetchTracks };
+    }, [limit, page]);
+    return { tracks, loading, error, refresh: fetchTracks, total, page, pages };
 };
 export const usePopularCreators = (limit = 10) => {
     const [creators, setCreators] = useState([]);

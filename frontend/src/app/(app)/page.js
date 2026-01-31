@@ -108,7 +108,7 @@ export default function Home() {
         return () => clearInterval(interval);
     }, []);
     // Fetch real trending tracks
-    const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } = useTrendingTracks(10);
+    const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } = useTrendingTracks(0); // 0 means no limit - get all tracks
     // Fetch real popular creators
     const { creators: popularCreatorsData, loading: creatorsLoading } = usePopularCreators(6);
     // Listen for track updates (when favorites are added/removed)
