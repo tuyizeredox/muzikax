@@ -211,11 +211,17 @@ export default function Home() {
     creatorId: typeof track.creatorId === 'object' && track.creatorId !== null ? (track.creatorId as any)._id : track.creatorId
   }));
 
-  // Filter out beats from trending tracks for display
-  const trendingTracks: Track[] = allTracks.filter((track) => track.category !== "beat");
+  // Remove duplicate tracks by ID
+  const uniqueTracks: Track[] = Array.from(new Map(allTracks.map(track => [track.id, track])).values());
 
-  // For now, use trending tracks for new tracks as well
-  const newTracks: Track[] = trendingTracks;
+  // Filter out beats from trending tracks for display
+  const trendingTracks: Track[] = uniqueTracks.filter((track) => track.category !== "beat");
+
+  // New releases: sort by creation date (newest first)
+  const newTracks: Track[] = [...trendingTracks].sort((a, b) => {
+    // Sort by id in descending order to show "new" items (assuming newer items have higher IDs or appear last in the list)
+    return b.id.localeCompare(a.id);
+  });
 
   // Transform creators data to match existing interface
   const popularCreators: Creator[] = popularCreatorsData.map((creator) => ({
@@ -644,7 +650,7 @@ export default function Home() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {forYouTracks.map((track) => (
               <div
-                key={track.id}
+                key={`for-you-${track.id}`}
                 className="group card-bg rounded-xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
               >
                 <div className="relative">
@@ -1028,7 +1034,7 @@ export default function Home() {
               .slice(0, 6)
               .map((track) => (
                 <div
-                  key={track.id}
+                  key={`featured-mixes-${track.id}`}
                   className="group card-bg rounded-xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                 >
                   <div className="relative">
@@ -1225,7 +1231,7 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {trendingTracks.map((track) => (
                 <div
-                  key={track.id}
+                  key={`trending-${track.id}`}
                   className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                 >
                   <div className="relative">
@@ -1377,7 +1383,7 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {newTracks.map((track) => (
                 <div
-                  key={track.id}
+                  key={`new-release-${track.id}`}
                   className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                 >
                   <div className="relative">
@@ -1597,7 +1603,7 @@ export default function Home() {
                 .filter((track) => track.category === "mix")
                 .map((track) => (
                   <div
-                    key={track.id}
+                    key={`mixes-${track.id}`}
                     className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                   >
                     <div className="relative">

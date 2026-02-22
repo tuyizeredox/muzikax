@@ -148,7 +148,11 @@ export const fetchAllTracks = async (page: number = 1, limit: number = 10): Prom
  */
 export const fetchTrendingTracks = async (limit: number = 10): Promise<ITrack[]> => {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tracks/trending?limit=${limit}`);
+    const url = limit > 0 
+      ? `${process.env.NEXT_PUBLIC_API_URL}/api/tracks/trending?limit=${limit}`
+      : `${process.env.NEXT_PUBLIC_API_URL}/api/tracks/trending?limit=0`;
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch trending tracks: ${response.status} ${response.statusText}`);
@@ -195,7 +199,10 @@ export const fetchMonthlyPopularTracks = async (limit: number = 10): Promise<any
         category: track.type || 'song',
         type: track.type || 'song',
         paymentType: track.paymentType || 'free',
+        price: track.price,
+        currency: track.currency,
         creatorId: track.creatorId?._id || track.creatorId || '',
+        audioUrl: track.audioURL || '',
         monthlyPlays: track.monthlyPlays || 0,
         score: track.score || 0,
         daysOld: track.daysOld || 0

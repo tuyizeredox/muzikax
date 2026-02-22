@@ -233,15 +233,16 @@ export default function TrackCard({
           <div className="mt-2">
             {(() => {
               // Handle missing or null paymentType by defaulting to 'free'
-              const paymentType = track.paymentType || 'free';
+              const paymentType = track.paymentType || fullTrackData?.paymentType || 'free';
+              const price = track.price || fullTrackData?.price;
               return (
                 <>
                   <span className={`inline-block px-2 py-1 text-xs rounded-full ${paymentType === 'paid' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}>
                     {paymentType === 'paid' ? 'PAID BEAT' : 'FREE BEAT'}
                   </span>
-                  {paymentType === 'paid' && track.price && (
+                  {paymentType === 'paid' && price && (
                     <span className="ml-2 inline-block px-2 py-1 text-xs rounded-full bg-yellow-600 text-white">
-                      {track.price.toLocaleString()} RWF
+                      {price.toLocaleString()} RWF
                     </span>
                   )}
                 </>
@@ -253,15 +254,20 @@ export default function TrackCard({
         {/* Conditionally show download or MTN MoMo button for beats */}
         {track.type === 'beat' && (
           <div className="mt-2">
-            {track.paymentType === 'paid' ? (
+            {(track.paymentType === 'paid' || fullTrackData?.paymentType === 'paid') ? (
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
+                  const price = track.price || fullTrackData?.price;
+                  if (!price || price <= 0) {
+                    alert('Price not available for this beat');
+                    return;
+                  }
                   // Open global PesaPal payment modal
                   showPayment({
                     trackId: track.id,
                     trackTitle: track.title,
-                    price: track.price || 0,
+                    price: price,
                     audioUrl: fullTrackData?.audioURL || fullTrackData?.audioUrl
                   });
                 }}
@@ -270,7 +276,7 @@ export default function TrackCard({
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
-                Buy Now - {track.price?.toLocaleString()} RWF
+                Buy Now - {(track.price || fullTrackData?.price)?.toLocaleString()} RWF
               </button>
             ) : (
               <button 

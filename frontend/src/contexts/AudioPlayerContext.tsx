@@ -170,13 +170,27 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
   
   // Function to display time limit message for paid beats
   const timeLimitMessage = (track: Track) => {
-    const message = `You've reached the 40-second preview for "${track.title}". To get the full version, please contact the creator via WhatsApp.`;
-    alert(message);
-    
-    // Open WhatsApp with pre-filled message
-    if (track.creatorWhatsapp) {
-      const whatsappMessage = `Hi, I'm interested in the full version of your beat "${track.title}" that I found on MuzikaX. I've listened to the 40-second preview and would like to purchase the full version.`;
-      window.open(`https://wa.me/${track.creatorWhatsapp}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    // For paid beats, trigger the payment modal instead of WhatsApp
+    if (track.paymentType === 'paid' && track.price && track.price > 0) {
+      const paymentEvent = new CustomEvent('requestTrackPayment', {
+        detail: {
+          trackId: track.id,
+          trackTitle: track.title,
+          price: track.price,
+          audioUrl: track.audioUrl
+        }
+      });
+      window.dispatchEvent(paymentEvent);
+    } else {
+      // Fallback for free beats or beats without price info
+      const message = `You've reached the 40-second preview for "${track.title}". To get the full version, please contact the creator via WhatsApp.`;
+      alert(message);
+      
+      // Open WhatsApp with pre-filled message
+      if (track.creatorWhatsapp) {
+        const whatsappMessage = `Hi, I'm interested in the full version of your beat "${track.title}" that I found on MuzikaX. I've listened to the 40-second preview and would like to purchase the full version.`;
+        window.open(`https://wa.me/${track.creatorWhatsapp}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+      }
     }
     
     // Reset the time limit state to allow replaying or playing another track

@@ -13,6 +13,7 @@ const initialState = {
   challenges: [],
   trendingChallenges: [],
   liveRooms: [],
+  comments: {},
   currentTab: 'trending',
   loading: {
     posts: false,
@@ -20,7 +21,8 @@ const initialState = {
     challenges: false,
     liveRooms: false,
     postCreation: false,
-    commentCreation: false
+    commentCreation: false,
+    commentsFetching: {}
   },
   error: null,
   pagination: {
@@ -177,6 +179,67 @@ const communityReducer = (state, action) => {
             ...state.pagination[action.payload.section],
             ...action.payload.pagination
           }
+        }
+      };
+    
+    case 'SET_COMMENTS':
+      return {
+        ...state,
+        comments: {
+          ...state.comments,
+          [action.payload.postId]: action.payload.comments
+        },
+        loading: {
+          ...state.loading,
+          commentsFetching: {
+            ...state.loading.commentsFetching,
+            [action.payload.postId]: false
+          }
+        }
+      };
+    
+    case 'SET_COMMENTS_LOADING':
+      return {
+        ...state,
+        loading: {
+          ...state.loading,
+          commentsFetching: {
+            ...state.loading.commentsFetching,
+            [action.payload.postId]: action.payload.loading
+          }
+        }
+      };
+    
+    case 'ADD_COMMENT_TO_POST':
+      return {
+        ...state,
+        comments: {
+          ...state.comments,
+          [action.payload.postId]: [...(state.comments[action.payload.postId] || []), action.payload.comment]
+        }
+      };
+    
+    case 'DELETE_COMMENT':
+      return {
+        ...state,
+        comments: {
+          ...state.comments,
+          [action.payload.postId]: state.comments[action.payload.postId]?.filter(
+            comment => comment.id !== action.payload.commentId
+          ) || []
+        }
+      };
+    
+    case 'UPDATE_COMMENT_LIKES':
+      return {
+        ...state,
+        comments: {
+          ...state.comments,
+          [action.payload.postId]: state.comments[action.payload.postId]?.map(comment =>
+            comment.id === action.payload.commentId
+              ? { ...comment, likes: action.payload.likes, liked: action.payload.liked }
+              : comment
+          ) || []
         }
       };
     
@@ -446,6 +509,91 @@ export const CommunityProvider = ({ children }) => {
     }
   }, [dispatch]);
 
+  // Fetch comments for a post
+  const fetchComments = useCallback(async (postId, options = {}) => {
+    try {
+      dispatch({ 
+        type: 'SET_COMMENTS_LOADING', 
+        payload: { postId, loading: true } 
+      });
+      
+      const { limit = 20, offset = 0, sortBy = 'createdAt', sortOrder = 'desc', includeReplies = true } = options;
+      const params = new URLSearchParams({
+        limit,
+        offset,
+        sortBy,
+        sortOrder,
+        includeReplies
+      });
+      
+      const response = await communityCommentService.getComments(postId, { limit, offset, sortBy, sortOrder, includeReplies });
+      
+      dispatch({ 
+        type: 'SET_COMMENTS', 
+        payload: { postId, comments: response.comments || [] } 
+      });
+      return response;
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error.message });
+      throw error;
+    }
+  }, [dispatch]);
+
+  // Add a comment to a post
+  const addComment = useCallback(async (postId, text, parentId = null) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: { section: 'commentCreation', loading: true } });
+      
+      const response = await communityCommentService.addComment(postId, text, parentId);
+      
+      dispatch({
+        type: 'ADD_COMMENT_TO_POST',
+        payload: { postId, comment: response.comment }
+      });
+      
+      return response;
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error.message });
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: { section: 'commentCreation', loading: false } });
+    }
+  }, [dispatch]);
+
+  // Delete a comment
+  const deleteComment = useCallback(async (postId, commentId) => {
+    try {
+      const response = await communityCommentService.deleteComment(commentId);
+      
+      dispatch({
+        type: 'DELETE_COMMENT',
+        payload: { postId, commentId }
+      });
+      
+      return response;
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error.message });
+      throw error;
+    }
+  }, [dispatch]);
+
+  // Like/unlike a comment
+  const likeComment = useCallback(async (postId, commentId) => {
+    try {
+      const response = await communityCommentService.likeComment(commentId);
+      
+      dispatch({
+        type: 'UPDATE_COMMENT_LIKES',
+        payload: { postId, commentId, likes: response.likes, liked: response.liked }
+      });
+      
+      return response;
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error.message });
+      throw error;
+    }
+  }, [dispatch]);
+
   // Update filters
   const updateFilters = useCallback((section, filters) => {
     dispatch({
@@ -479,6 +627,10 @@ export const CommunityProvider = ({ children }) => {
     participateInChallenge,
     fetchLiveRooms,
     joinLiveRoom,
+    fetchComments,
+    addComment,
+    deleteComment,
+    likeComment,
     updateFilters,
     setCurrentTab,
     resetState,

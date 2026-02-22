@@ -3,10 +3,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { followCreator, unfollowCreator, checkFollowStatus } from '../services/trackService';
 
 interface Creator {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   type: string;
-  followers: number;
+  followers?: number;
+  followersCount?: number;
   avatar: string;
   verified?: boolean;
 }
@@ -28,26 +30,29 @@ export default function ArtistCard({ creator, followStatus, setFollowStatus }: A
       return;
     }
 
+    const creatorId = creator._id || creator.id;
+    if (!creatorId) {
+      console.error('Creator ID not found');
+      alert('Creator ID not found. Please try again.');
+      return;
+    }
+
     try {
-      if (followStatus[creator.id]) {
-        // Unfollow the creator
-        await unfollowCreator(creator.id);
+      if (followStatus[creatorId]) {
+        await unfollowCreator(creatorId);
         
-        // Update the follow status
         setFollowStatus(prev => ({
           ...prev,
-          [creator.id]: false
+          [creatorId]: false
         }));
         
         console.log('Successfully unfollowed creator');
       } else {
-        // Follow the creator
-        await followCreator(creator.id);
+        await followCreator(creatorId);
         
-        // Update the follow status
         setFollowStatus(prev => ({
           ...prev,
-          [creator.id]: true
+          [creatorId]: true
         }));
         
         console.log('Successfully followed creator');
@@ -71,7 +76,7 @@ export default function ArtistCard({ creator, followStatus, setFollowStatus }: A
   return (
     <div 
       className="flex-shrink-0 w-40 sm:w-44 md:w-48 group card-bg rounded-xl p-4 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 cursor-pointer"
-      onClick={() => router.push(`/artists/${creator.id}`)}
+      onClick={() => router.push(`/artists/${creator._id || creator.id}`)}
     >
       <div className="flex flex-col items-center text-center">
         <div className="relative mb-3">
@@ -108,13 +113,13 @@ export default function ArtistCard({ creator, followStatus, setFollowStatus }: A
           {creator.type}
         </p>
         <p className="text-gray-500 text-xs mb-2">
-          {creator.followers.toLocaleString()} followers
+          {(creator.followers || creator.followersCount || 0).toLocaleString()} followers
         </p>
         <button 
-          className={`w-full px-3 py-1.5 ${followStatus[creator.id] ? 'bg-gray-600 hover:bg-gray-700 border-gray-600' : 'bg-transparent border border-[#FFCB2B] text-[#FFCB2B] hover:bg-[#FFCB2B]/10'} rounded-full text-xs font-medium transition-colors`}
+          className={`w-full px-3 py-1.5 ${followStatus[creator._id || creator.id || ''] ? 'bg-gray-600 hover:bg-gray-700 border-gray-600' : 'bg-transparent border border-[#FFCB2B] text-[#FFCB2B] hover:bg-[#FFCB2B]/10'} rounded-full text-xs font-medium transition-colors`}
           onClick={handleFollowToggle}
         >
-          {followStatus[creator.id] ? 'Unfollow' : 'Follow'}
+          {followStatus[creator._id || creator.id || ''] ? 'Unfollow' : 'Follow'}
         </button>
       </div>
     </div>

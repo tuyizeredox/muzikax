@@ -71,12 +71,10 @@ function ExploreContent() {
   const [searchTerm, setSearchTerm] = useState<string>('')
   const searchParams = useSearchParams()
   const router = useRouter()
-  // Use pagination for lazy loading
-  const [page, setPage] = useState(1);
   const [allTracks, setAllTracks] = useState<Track[]>([]);
-  const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks, total: totalTracks, pages: totalPages } = useTrendingTracks(20, page); // Load 20 tracks per page
+  const { tracks: trendingTracksData, loading: trendingLoading, refresh: refreshTrendingTracks } = useTrendingTracks(0); // 0 means fetch all tracks without limit
 
-  // Handle data loading - clear and replace tracks instead of accumulating
+  // Handle data loading - fetch all tracks at once
   useEffect(() => {
     if (trendingTracksData.length > 0 && !trendingLoading) {
       const newTracks: Track[] = trendingTracksData.map(track => ({
@@ -99,16 +97,9 @@ function ExploreContent() {
           ? (track.creatorId as any)._id
           : track.creatorId
       }));
-      // Replace all tracks instead of accumulating to prevent duplicates
       setAllTracks(newTracks);
     }
-  }, [trendingTracksData, trendingLoading, page, selectedCategory, searchTerm]);
-
-  const loadMore = useCallback(() => {
-    if (page < (totalPages || 1) && !trendingLoading) {
-      setPage(prev => prev + 1);
-    }
-  }, [page, totalPages, trendingLoading]);
+  }, [trendingTracksData, trendingLoading]);
   const { creators: popularCreatorsData, loading: creatorsLoading, refresh: refreshCreators } = usePopularCreators(20)
   const { currentTrack, isPlaying, playTrack, setCurrentPlaylist, favorites, favoritesLoading, addToFavorites, removeFromFavorites, addToQueue } = useAudioPlayer()
 
@@ -661,14 +652,14 @@ function ExploreContent() {
                 <div className="text-white">Loading beats...</div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6 lg:gap-8">
                 {beats.map((beat) => (
-                  <div key={`beat-${beat.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`beat-${beat.id}`} className="group card-bg rounded-lg xs:rounded-xl sm:rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={beat.coverImage || beat.coverURL || '/placeholder-track.png'} 
                         alt={beat.title} 
-                        className="w-full h-40 sm:h-48 md:h-56 object-cover"
+                        className="w-full aspect-square sm:h-48 md:h-56 object-cover"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = '/placeholder-track.png';
@@ -840,17 +831,17 @@ function ExploreContent() {
                       </div>
                     </div>
                     
-                    <div className="p-4 sm:p-5">
-                      <h3 className="font-bold text-white text-lg mb-1 truncate">{beat.title}</h3>
-                      <p className="text-gray-400 text-sm sm:text-base mb-3 sm:mb-4">{beat.artist}</p>
+                    <div className="p-3 xs:p-4 sm:p-5">
+                      <h3 className="font-bold text-white text-xs xs:text-sm sm:text-lg mb-1 truncate">{beat.title}</h3>
+                      <p className="text-gray-400 text-xs xs:text-sm sm:text-base mb-2 xs:mb-3 sm:mb-4">{beat.artist}</p>
                       
                       <div className="flex justify-between text-xs sm:text-sm text-gray-500">
-                        <span>{beat.plays.toLocaleString()} plays</span>
+                        <span className="text-xs">{beat.plays.toLocaleString()} plays</span>
                         <div className="flex items-center gap-1">
                           <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
                           </svg>
-                          <span>{beat.likes}</span>
+                          <span className="text-xs">{beat.likes}</span>
                         </div>
                       </div>
                     </div>
@@ -869,14 +860,14 @@ function ExploreContent() {
                 <div className="text-white">Loading albums...</div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6 lg:gap-8">
                 {albums.map((album) => (
-                  <div key={`album-${album.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`album-${album.id}`} className="group card-bg rounded-lg xs:rounded-xl sm:rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={album.coverImage || album.coverURL || '/placeholder-album.png'} 
                         alt={album.title} 
-                        className="w-full h-40 sm:h-48 md:h-56 object-cover"
+                        className="w-full aspect-square sm:h-48 md:h-56 object-cover"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = '/placeholder-album.png';
@@ -952,17 +943,17 @@ function ExploreContent() {
                       </div>
                     </div>
                     
-                    <div className="p-4 sm:p-5">
-                      <h3 className="font-bold text-white text-lg mb-1 truncate">{album.title}</h3>
-                      <p className="text-gray-400 text-sm sm:text-base mb-3 sm:mb-4">{album.artist}</p>
+                    <div className="p-3 xs:p-4 sm:p-5">
+                      <h3 className="font-bold text-white text-xs xs:text-sm sm:text-lg mb-1 truncate">{album.title}</h3>
+                      <p className="text-gray-400 text-xs xs:text-sm sm:text-base mb-2 xs:mb-3 sm:mb-4">{album.artist}</p>
                       
                       <div className="flex justify-between text-xs sm:text-sm text-gray-500">
-                        <span>{album.tracks?.length || 0} tracks</span>
+                        <span className="text-xs">{album.tracks?.length || 0} tracks</span>
                         <div className="flex items-center gap-1">
                           <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
                           </svg>
-                          <span>{album.plays}</span>
+                          <span className="text-xs">{album.plays}</span>
                         </div>
                       </div>
                     </div>
@@ -981,16 +972,16 @@ function ExploreContent() {
                 <div className="text-white">Loading playlists...</div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6 lg:gap-8">
                 {playlists.map((playlist) => (
-                  <div key={`playlist-${playlist.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`playlist-${playlist.id}`} className="group card-bg rounded-lg xs:rounded-xl sm:rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={playlist.tracks && playlist.tracks.length > 0 ? 
                           (playlist.tracks[0].coverURL || '/placeholder-playlist.png') : 
                           '/placeholder-playlist.png'} 
                         alt={playlist.name} 
-                        className="w-full h-40 sm:h-48 md:h-56 object-cover"
+                        className="w-full aspect-square sm:h-48 md:h-56 object-cover"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = '/placeholder-playlist.png';
@@ -1069,12 +1060,12 @@ function ExploreContent() {
                       </div>
                     </div>
                     
-                    <div className="p-4 sm:p-5">
-                      <h3 className="font-bold text-white text-lg mb-1 truncate">{playlist.name}</h3>
-                      <p className="text-gray-400 text-sm sm:text-base mb-3 sm:mb-4">
+                    <div className="p-3 xs:p-4 sm:p-5">
+                      <h3 className="font-bold text-white text-xs xs:text-sm sm:text-lg mb-1 truncate">{playlist.name}</h3>
+                      <p className="text-gray-400 text-xs xs:text-sm sm:text-base mb-2 xs:mb-3 sm:mb-4">
                         {playlist.description ? `${playlist.description.substring(0, 60)}...` : 'Playlist'}
                       </p>
-                      <p className="text-gray-500 text-xs mb-3">by {playlist.userId?.name || 'Unknown Creator'}</p>
+                      <p className="text-gray-500 text-xs mb-2 xs:mb-3">by {playlist.userId?.name || 'Unknown Creator'}</p>
                       
                       <div className="flex justify-between text-xs sm:text-sm text-gray-500">
                         <span>{playlist.tracks?.length || 0} tracks</span>
@@ -1096,14 +1087,14 @@ function ExploreContent() {
                 <div className="text-white">Loading tracks...</div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6 lg:gap-8">
                 {filteredTracks.map((track) => (
-                  <div key={`track-${track.id}`} className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
+                  <div key={`track-${track.id}`} className="group card-bg rounded-lg xs:rounded-xl sm:rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10">
                     <div className="relative">
                       <img 
                         src={track.coverImage || track.coverURL || '/placeholder-track.png'} 
                         alt={track.title} 
-                        className="w-full h-40 sm:h-48 md:h-56 object-cover"
+                        className="w-full aspect-square sm:h-48 md:h-56 object-cover"
                         onError={(e) => {
                           // Handle broken images gracefully
                           const target = e.target as HTMLImageElement;
@@ -1151,32 +1142,31 @@ function ExploreContent() {
                               setCurrentPlaylist(playlistTracks);
                             }
                           }}
-                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#FF4D67] flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg hover:bg-[#ff2a4d] hover:scale-105">
+                          className="w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16 rounded-full bg-[#FF4D67] flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg hover:bg-[#ff2a4d] hover:scale-105">
                           {currentTrack?.id === track.id && isPlaying ? (
-                            <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <svg className="w-5 h-5 xs:w-6 xs:h-6 sm:w-7 sm:h-7" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path>
                             </svg>
                           ) : (
-                            <svg className="w-6 h-6 sm:w-7 sm:h-7 ml-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <svg className="w-5 h-5 xs:w-6 xs:h-6 sm:w-7 sm:h-7 ml-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
                             </svg>
                           )}
                         </button>
                       </div>
-                      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex flex-col gap-2">
+                      <div className="absolute top-2 right-2 xs:top-3 xs:right-3 sm:top-4 sm:right-4 flex flex-col gap-1.5 xs:gap-2">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Find the full track object
                             const fullTrack = trendingTracksData.find(t => t._id === track._id);
                             if (fullTrack) {
                               toggleFavorite(track.id, fullTrack);
                             }
                           }}
-                          className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 shadow-md"
+                          className="p-1.5 xs:p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 shadow-md"
                         >
                           <svg 
-                            className={`w-5 h-5 sm:w-6 sm:h-6 transition-all duration-300 ${favoriteStatus[track.id] ? 'text-red-500 fill-current scale-110' : 'stroke-current'}`}
+                            className={`w-4 h-4 xs:w-5 xs:h-5 sm:w-6 sm:h-6 transition-all duration-300 ${favoriteStatus[track.id] ? 'text-red-500 fill-current scale-110' : 'stroke-current'}`}
                             fill={favoriteStatus[track.id] ? "currentColor" : "none"}
                             stroke="currentColor"
                             strokeWidth="1.5"
@@ -1189,12 +1179,11 @@ function ExploreContent() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Add to queue functionality
                             const fullTrack = trendingTracksData.find(t => t._id === track._id);
                             if (fullTrack && fullTrack.audioURL) {
                               try {
                                 addToQueue({
-                                  id: track._id || track.id || 'unknown', // Use _id or fallback to id
+                                  id: track._id || track.id || 'unknown',
                                   title: track.title,
                                   artist: track.artist,
                                   coverImage: track.coverImage || track.coverURL || '/placeholder-track.png',
@@ -1211,7 +1200,6 @@ function ExploreContent() {
                                     ? (fullTrack.creatorId as any).whatsappContact 
                                     : undefined)
                                 });
-                                // Show toast notification
                                 const toastEvent = new CustomEvent('showToast', {
                                   detail: {
                                     message: `Added ${track.title} to queue!`,
@@ -1221,7 +1209,6 @@ function ExploreContent() {
                                 window.dispatchEvent(toastEvent);
                               } catch (error) {
                                 console.error('Error adding to queue:', error);
-                                // Show error notification
                                 const toastEvent = new CustomEvent('showToast', {
                                   detail: {
                                     message: `Failed to add ${track.title} to queue`,
@@ -1231,7 +1218,6 @@ function ExploreContent() {
                                 window.dispatchEvent(toastEvent);
                               }
                             } else {
-                              // Show error if track not found or no audio
                               const toastEvent = new CustomEvent('showToast', {
                                 detail: {
                                   message: `Cannot add ${track.title} to queue - audio not available`,
@@ -1241,11 +1227,11 @@ function ExploreContent() {
                               window.dispatchEvent(toastEvent);
                             }
                           }}
-                          className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 shadow-md"
+                          className="p-1.5 xs:p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 shadow-md"
                           title={`Add ${track.title} to queue`}
                         >
                           <svg 
-                            className="w-5 h-5 sm:w-6 sm:h-6"
+                            className="w-4 h-4 xs:w-5 xs:h-5 sm:w-6 sm:h-6"
                             fill="none" 
                             stroke="currentColor" 
                             viewBox="0 0 24 24" 
@@ -1257,9 +1243,9 @@ function ExploreContent() {
                       </div>
                     </div>
                     
-                    <div className="p-4 sm:p-5">
-                      <h3 className="font-bold text-white text-lg mb-1 truncate">{track.title}</h3>
-                      <p className="text-gray-400 text-sm sm:text-base mb-3 sm:mb-4">{track.artist}</p>
+                    <div className="p-3 xs:p-4 sm:p-5">
+                      <h3 className="font-bold text-white text-xs xs:text-sm sm:text-lg mb-1 truncate">{track.title}</h3>
+                      <p className="text-gray-400 text-xs xs:text-sm sm:text-base mb-2 xs:mb-3 sm:mb-4">{track.artist}</p>
                       
                       <div className="flex justify-between text-xs sm:text-sm text-gray-500">
                         <span>{track.plays.toLocaleString()} plays</span>
@@ -1274,19 +1260,8 @@ function ExploreContent() {
                   </div>
                 ))}
               </div>
-
-              )}{page < (totalPages || 1) && (
-                <div className="flex justify-center py-8">
-                  <button
-                    onClick={loadMore}
-                    disabled={trendingLoading}
-                    className="px-6 py-3 bg-gradient-to-r from-[#FF4D67] to-[#FFCB2B] text-white rounded-full font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    {trendingLoading ? 'Loading...' : 'Load More Tracks'}
-                  </button>
-                </div>
-              )}
             
+            )}
           </>
         )}
 
@@ -1298,78 +1273,72 @@ function ExploreContent() {
                 <div className="text-white">Loading creators...</div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6">
                 {filteredCreators.map((creator) => (
-                  <div key={`creator-${creator.id}`} className="group card-bg rounded-2xl p-4 sm:p-6 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 cursor-pointer"
+                  <div key={`creator-${creator._id || creator.id}`} className="group card-bg rounded-lg xs:rounded-xl sm:rounded-2xl p-3 xs:p-4 sm:p-5 md:p-6 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 cursor-pointer"
                     onClick={() => {
-                      // Navigate to the creator's profile page
-                      router.push(`/artists/${creator.id}`);
+                      router.push(`/artists/${creator._id || creator.id}`);
                     }}>
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="relative">
+                    <div className="flex flex-col items-center text-center mb-3 xs:mb-4">
+                      <div className="relative mb-2 xs:mb-3">
                         <img 
                           src={creator.avatar} 
                           alt={creator.name} 
-                          className="w-16 h-16 rounded-full object-cover"
+                          className="w-14 h-14 xs:w-16 xs:h-16 rounded-full object-cover"
                         />
                         {creator.verified && (
-                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#FF4D67] rounded-full flex items-center justify-center">
-                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                          <div className="absolute -bottom-1 -right-1 w-5 h-5 xs:w-6 xs:h-6 bg-[#FF4D67] rounded-full flex items-center justify-center">
+                            <svg className="w-2.5 h-2.5 xs:w-3 xs:h-3 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
                             </svg>
                           </div>
                         )}
                       </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg">{creator.name}</h3>
-                        <p className="text-gray-400 text-sm">{creator.creatorType}</p>
-                      </div>
+                      <h3 className="font-bold text-white text-xs xs:text-sm sm:text-base truncate w-full">{creator.name}</h3>
+                      <p className="text-gray-400 text-xs sm:text-sm mb-1 xs:mb-2">{creator.creatorType}</p>
                     </div>
                     
-                    <div className="flex justify-between text-sm text-gray-500 mb-4">
+                    <div className="flex justify-center text-xs xs:text-sm text-gray-500 mb-2 xs:mb-3">
                       <span>{creator.followersCount.toLocaleString()} followers</span>
                     </div>
                     
                     <button 
-                      className={`w-full py-3 sm:py-3.5 rounded-lg font-bold hover:opacity-90 transition-all duration-300 text-sm sm:text-base shadow-md hover:shadow-lg transform hover:-translate-y-0.5 ${followStatus[creator.id] ? 'bg-gray-600 text-white' : 'bg-gradient-to-r from-[#FFCB2B] to-[#FFA726] text-gray-900'}`}
+                      className={`w-full py-2 xs:py-2.5 sm:py-3 rounded-lg font-bold hover:opacity-90 transition-all duration-300 text-xs xs:text-sm sm:text-base shadow-md hover:shadow-lg transform hover:-translate-y-0.5 ${followStatus[creator._id || creator.id || ''] ? 'bg-gray-600 text-white' : 'bg-gradient-to-r from-[#FFCB2B] to-[#FFA726] text-gray-900'}`}
                       onClick={async (e) => {
-                        // Prevent the click from propagating to the parent div (which would navigate to the profile)
                         e.stopPropagation();
+                        const creatorId = creator._id || creator.id;
+                        if (!creatorId) {
+                          alert('Creator ID not found');
+                          return;
+                        }
                         try {
-                          // Determine current follow status based on current state
-                          const currentFollowStatus = followStatus[creator.id];
+                          const currentFollowStatus = followStatus[creatorId];
                           if (currentFollowStatus) {
-                            // Unfollow the creator
-                            await unfollowCreator(creator.id);
+                            await unfollowCreator(creatorId);
                             
-                            // Update the follow status
                             setFollowStatus(prev => ({
                               ...prev,
-                              [creator.id]: false
+                              [creatorId]: false
                             }));
                           } else {
-                            // Follow the creator
-                            await followCreator(creator.id);
+                            await followCreator(creatorId);
                             
-                            // Update the follow status
                             setFollowStatus(prev => ({
                               ...prev,
-                              [creator.id]: true
+                              [creatorId]: true
                             }));
                           }
                           
-                          // Show success feedback
                           console.log(`Successfully ${currentFollowStatus ? 'unfollowed' : 'followed'} creator`);
                           
-                          // Refresh creators to update follower counts
                           refreshCreators();
                         } catch (error) {
-                          console.error(`Failed to ${followStatus[creator.id] ? 'unfollow' : 'follow'} creator:`, error);
-                          alert(`Failed to ${followStatus[creator.id] ? 'unfollow' : 'follow'} creator. Please try again.`);
+                          console.error(`Failed to ${followStatus[creatorId] ? 'unfollow' : 'follow'} creator:`, error);
+                          alert(`Failed to ${followStatus[creatorId] ? 'unfollow' : 'follow'} creator. Please try again.`);
                         }
                       }}
                     >
-                      {followStatus[creator.id] ? 'Following' : 'Follow'}
+                      {followStatus[creator._id || creator.id || ''] ? 'Following' : 'Follow'}
                     </button>
                   </div>
                 ))}

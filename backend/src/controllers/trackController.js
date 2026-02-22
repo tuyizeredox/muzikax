@@ -683,14 +683,20 @@ exports.getMonthlyPopularTracks = getMonthlyPopularTracks;
 // Get trending tracks
 const getTrendingTracks = async (req, res) => {
         try {
-            const limit = parseInt(req.query['limit']) || 10;
+            const limitParam = req.query['limit'];
+            const limit = limitParam !== undefined ? parseInt(limitParam) : 10;
             // Filter out beat and beta type tracks from trending (case-insensitive)
-            const tracks = await Track_1.find({
+            const query = Track_1.find({
                 type: { $nin: ['beat', 'BEAT', 'Beat', 'beta', 'BETA', 'Beta'] }  // Case-insensitive exclusion of types
             })
-                .sort({ plays: -1, createdAt: -1 })
-                .limit(limit)
-                .populate('creatorId', 'name avatar');
+                .sort({ plays: -1, createdAt: -1 });
+            
+            // Only apply limit if limit > 0
+            if (limit > 0) {
+                query.limit(limit);
+            }
+            
+            const tracks = await query.populate('creatorId', 'name avatar');
                 
             // Ensure all tracks have proper paymentType values
             const tracksWithDefaults = tracks.map(track => {

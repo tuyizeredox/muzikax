@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { FaPlus, FaMusic, FaUserFriends, FaFire } from 'react-icons/fa';
+import { FaPlus, FaMusic, FaUserFriends, FaFire, FaShare } from 'react-icons/fa';
 // Import UploadCare components
 import { FileUploaderRegular } from "@uploadcare/react-uploader";
 import "@uploadcare/react-uploader/core.css";
@@ -18,6 +18,13 @@ const CommunityPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [expandedComments, setExpandedComments] = useState({}); // Track expanded comments for each post
   const [newComment, setNewComment] = useState({}); // Store new comment text for each post
+  const [loadingComments, setLoadingComments] = useState({}); // Track which posts are loading comments
+  const [sharedNotification, setSharedNotification] = useState(null); // Track share notifications
+  const [recommendedArtists, setRecommendedArtists] = useState([]); // Recommended artists to follow
+  const [loadingArtists, setLoadingArtists] = useState(true); // Loading state for artists
+  const [followedArtists, setFollowedArtists] = useState({}); // Track followed artists
+  const [showArtistsModal, setShowArtistsModal] = useState(false); // Show artists modal on mobile
+  const [artistFilter, setArtistFilter] = useState('all'); // Filter: all, following, notFollowing
 
   // Helper function to make API requests with automatic token refresh
   const makeApiRequest = async (url, options = {}) => {
@@ -90,7 +97,8 @@ const CommunityPage = () => {
         const processedVibes = data.posts.map(post => ({
           ...post,
           likes: post.likes || 0,
-          comments: post.comments || [],
+          commentCount: typeof post.comments === 'number' ? post.comments : 0,
+          comments: Array.isArray(post.comments) ? post.comments : [],
           liked: post.liked || false  // Initialize liked status
         }));
         setVibes(processedVibes);
@@ -102,9 +110,133 @@ const CommunityPage = () => {
     }
   };
 
-  // Fetch vibes when component mounts
+  // Fetch recommended artists
+  const fetchRecommendedArtists = async () => {
+    try {
+      setLoadingArtists(true);
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      
+      // Fetch current user's profile to get their following list
+      let userFollowing = [];
+      try {
+        const userResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`,
+          {
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : ''
+            }
+          }
+        );
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          userFollowing = userData.following || [];
+          console.log('User following list:', userFollowing);
+        }
+      } catch (err) {
+        console.error('Failed to fetch user profile:', err);
+        userFollowing = user?.following || [];
+      }
+      
+      const followingIds = userFollowing
+        .map(id => {
+          if (!id) return '';
+          if (typeof id === 'object' && id !== null) {
+            return (id._id || id.id || '').toString();
+          }
+          return String(id);
+        })
+        .filter(id => id.length > 0);
+      console.log('User following array:', userFollowing);
+      console.log('Following IDs for comparison:', followingIds);
+      
+      // Fetch all creators without limit
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/public/users-for-chat?limit=100`,
+        {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : ''
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Filter for creators only - get all
+        const artists = Array.isArray(data.users) 
+          ? data.users.filter(u => u.role === 'creator')
+          : [];
+        setRecommendedArtists(artists);
+        
+        // Mark which artists the user is already following
+        const followedMap = {};
+        artists.forEach(artist => {
+          const artistId = artist._id || artist.id;
+          const artistIdStr = String(artistId);
+          const isFollowing = followingIds.includes(artistIdStr);
+          followedMap[artistId] = isFollowing;
+          console.log(`Artist ${artist.name} (${artistIdStr}): ${isFollowing ? 'FOLLOWING' : 'not following'}`);
+        });
+        const followingCount = Object.values(followedMap).filter(Boolean).length;
+        console.log(`Total artists being followed: ${followingCount}/${artists.length}`);
+        setFollowedArtists(followedMap);
+      } else {
+        console.error('Failed to fetch artists:', response.status);
+        setRecommendedArtists([]);
+      }
+    } catch (error) {
+      console.error('Error fetching recommended artists:', error);
+      setRecommendedArtists([]);
+    } finally {
+      setLoadingArtists(false);
+    }
+  };
+
+  // Get filtered artists based on follow status
+  const getFilteredArtists = () => {
+    if (artistFilter === 'following') {
+      return recommendedArtists.filter(a => followedArtists[a._id || a.id]);
+    } else if (artistFilter === 'notFollowing') {
+      return recommendedArtists.filter(a => !followedArtists[a._id || a.id]);
+    }
+    return recommendedArtists;
+  };
+
+  // Follow/unfollow artist
+  const toggleFollowArtist = async (artistId) => {
+    try {
+      const isFollowing = followedArtists[artistId];
+      const method = isFollowing ? 'DELETE' : 'POST';
+      const endpoint = isFollowing ? 'unfollow' : 'follow';
+      
+      const response = await makeApiRequest(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/following/${endpoint}/${artistId}`,
+        { method }
+      );
+
+      if (response.ok) {
+        setFollowedArtists(prev => ({
+          ...prev,
+          [artistId]: !prev[artistId]
+        }));
+        console.log(`Successfully ${isFollowing ? 'unfollowed' : 'followed'} artist`);
+        
+        // Refetch the artists to update the following counts
+        setTimeout(() => {
+          fetchRecommendedArtists();
+        }, 500);
+      } else {
+        const errorText = await response.text();
+        console.error(`Failed to ${endpoint} artist:`, response.status, errorText);
+      }
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+    }
+  };
+
+  // Fetch vibes and recommended artists when component mounts
   useEffect(() => {
     fetchVibes();
+    fetchRecommendedArtists();
   }, [user]); // Add user as dependency to refetch when user loads
 
   // Handle media upload success from Uploadcare
@@ -231,17 +363,22 @@ const CommunityPage = () => {
         },
         body: JSON.stringify({
           postId,
-          text: commentText  // Changed from 'content' to 'text' to match backend expectation
+          text: commentText
         })
       });
 
       if (response.ok) {
         const data = await response.json();
-        // Update the post with the new comment
+        
+        // Add the new comment to the local state
         setVibes(prevVibes => 
           prevVibes.map(vibe => 
             vibe.id === postId 
-              ? { ...vibe, comments: [...(vibe.comments || []), data.comment] } 
+              ? { 
+                  ...vibe, 
+                  comments: [...(Array.isArray(vibe.comments) ? vibe.comments : []), data.comment],
+                  commentCount: (vibe.commentCount || 0) + 1
+                } 
               : vibe
           )
         );
@@ -256,11 +393,92 @@ const CommunityPage = () => {
     }
   };
 
-  const toggleComments = (postId) => {
+  const toggleComments = async (postId) => {
+    const isExpanding = !expandedComments[postId];
+    
     setExpandedComments(prev => ({
       ...prev,
       [postId]: !prev[postId]
     }));
+
+    if (isExpanding) {
+      try {
+        setLoadingComments(prev => ({ ...prev, [postId]: true }));
+
+        const response = await makeApiRequest(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/community/comments/post/${postId}?limit=50&offset=0&sortOrder=desc`
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const commentsList = Array.isArray(data.comments) ? data.comments : [];
+          setVibes(prevVibes =>
+            prevVibes.map(vibe =>
+              vibe.id === postId
+                ? { 
+                    ...vibe, 
+                    comments: commentsList,
+                    commentCount: commentsList.length
+                  }
+                : vibe
+            )
+          );
+        }
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+      } finally {
+        setLoadingComments(prev => ({ ...prev, [postId]: false }));
+      }
+    }
+  };
+
+  // Share post function with Web Share API
+  const sharePost = async (postId, postTitle) => {
+    const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/community`;
+    const shareText = `Check out this vibe: "${postTitle}"`;
+
+    try {
+      // Try to use Web Share API if available (modern browsers)
+      if (navigator.share && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        await navigator.share({
+          title: 'MuzikaX Community',
+          text: shareText,
+          url: shareUrl
+        });
+        
+        // Track the share on backend
+        await makeApiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/community/posts/${postId}/share`, {
+          method: 'POST'
+        }).catch(err => console.log('Share tracked'));
+        
+        // Show notification
+        setSharedNotification('Post shared successfully! 🎉');
+        setTimeout(() => setSharedNotification(null), 3000);
+      } else {
+        // Fallback: Copy to clipboard and show options
+        await navigator.clipboard.writeText(shareUrl);
+        setSharedNotification('Link copied to clipboard! 📋');
+        setTimeout(() => setSharedNotification(null), 3000);
+        
+        // Track the share on backend
+        await makeApiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/community/posts/${postId}/share`, {
+          method: 'POST'
+        }).catch(err => console.log('Share tracked'));
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        // Copy to clipboard as fallback
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          setSharedNotification('Link copied to clipboard! 📋');
+          setTimeout(() => setSharedNotification(null), 3000);
+        } catch (clipboardError) {
+          console.error('Error sharing:', clipboardError);
+          setSharedNotification('Unable to share. Please try again.');
+          setTimeout(() => setSharedNotification(null), 3000);
+        }
+      }
+    }
   };
 
   if (!user) {
@@ -291,12 +509,22 @@ const CommunityPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 max-w-2xl">
-        {/* Header */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-[#FF4D67] to-[#FF8FA3] bg-clip-text text-transparent mb-2">Vibes</h1>
-          <p className="text-gray-400">Where artists and fans share the feels ✨</p>
+      {/* Share Notification */}
+      {sharedNotification && (
+        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-40 animate-fade-in">
+          {sharedNotification}
         </div>
+      )}
+
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Feed */}
+          <div className="lg:col-span-2">
+            {/* Header */}
+            <div className="text-center mb-6 sm:mb-8">
+              <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-[#FF4D67] to-[#FF8FA3] bg-clip-text text-transparent mb-2">Vibes</h1>
+              <p className="text-gray-400">Where artists and fans share the feels ✨</p>
+            </div>
 
         {/* Create Vibe Button */}
         {user && (
@@ -312,38 +540,46 @@ const CommunityPage = () => {
         )}
 
         {/* Category Filters */}
-        <div className="mb-6">
+        <div className="mb-6 overflow-x-auto">
           <div className="flex justify-center">
-            <div className="flex bg-gray-800/50 backdrop-blur-sm rounded-2xl p-1 gap-1">
+            <div className="flex bg-gray-800/50 backdrop-blur-sm rounded-2xl p-1 gap-1 min-w-max sm:min-w-fit">
               <button
                 onClick={() => setSelectedCategory('all')}
-                className={`flex items-center px-4 py-2 rounded-xl text-sm transition-colors ${
+                className={`flex items-center px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
                   selectedCategory === 'all' 
                     ? 'bg-gradient-to-r from-[#FF4D67] to-[#FF6B8B] text-white shadow-lg' 
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <FaUserFriends className="mr-1 text-xs" /> All Vibes
+                <FaUserFriends className="mr-1 text-xs" /> <span className="hidden sm:inline">All Vibes</span><span className="inline sm:hidden">Vibes</span>
               </button>
               <button
                 onClick={() => setSelectedCategory('artist')}
-                className={`flex items-center px-4 py-2 rounded-xl text-sm transition-colors ${
+                className={`flex items-center px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
                   selectedCategory === 'artist' 
                     ? 'bg-gradient-to-r from-purple-600 to-purple-800 text-white shadow-lg' 
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <FaMusic className="mr-1 text-xs" /> For Artists
+                <FaMusic className="mr-1 text-xs" /> <span className="hidden sm:inline">For Artists</span><span className="inline sm:hidden">Artists</span>
               </button>
               <button
                 onClick={() => setSelectedCategory('trending')}
-                className={`flex items-center px-4 py-2 rounded-xl text-sm transition-colors ${
+                className={`flex items-center px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
                   selectedCategory === 'trending' 
                     ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 font-medium shadow-lg' 
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <FaFire className="mr-1 text-xs" /> On the Flip!
+                <FaFire className="mr-1 text-xs" /> <span className="hidden sm:inline">On the Flip!</span><span className="inline sm:hidden">Flip</span>
+              </button>
+              {/* Mobile Discover Artists Button */}
+              <button
+                onClick={() => setShowArtistsModal(true)}
+                className="lg:hidden flex items-center px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors text-gray-400 hover:text-white whitespace-nowrap"
+                title="Discover Artists"
+              >
+                <FaMusic className="mr-1 text-xs" /> Discover
               </button>
             </div>
           </div>
@@ -355,23 +591,37 @@ const CommunityPage = () => {
             filteredVibes.map((vibe, index) => (
               <div key={vibe.id || vibe._id || index} className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-gray-700/50 hover:border-gray-600/50 transition-all">
                 <div className="flex items-start space-x-3">
-                  {vibe.author?.avatar ? (
-                    <img 
-                      src={vibe.author.avatar}
-                      alt={vibe.author.name}
-                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-r from-[#FF4D67] to-[#FF6B8B] flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-medium text-sm">
-                        {vibe.author?.name ? vibe.author.name.charAt(0).toUpperCase() : '?'}
-                      </span>
-                    </div>
-                  )}
+                  <a 
+                    href={`/profile/${vibe.userId?._id || vibe.userId || ''}`}
+                    className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                    title={`View ${vibe.userName}'s profile`}
+                  >
+                    {vibe.userAvatar ? (
+                      <img 
+                        src={vibe.userAvatar}
+                        alt={vibe.userName}
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-r from-[#FF4D67] to-[#FF6B8B] flex items-center justify-center">
+                        <span className="text-white font-medium text-sm">
+                          {vibe.userName ? vibe.userName.charAt(0).toUpperCase() : '?'}
+                        </span>
+                      </div>
+                    )}
+                  </a>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-semibold text-white truncate">{vibe.author?.name}</h3>
+                        <a 
+                          href={`/profile/${vibe.userId?._id || vibe.userId || ''}`}
+                          className="font-semibold text-white truncate hover:text-[#FF4D67] transition-colors"
+                        >
+                          {vibe.userName}
+                        </a>
                         <p className="text-xs text-gray-400">{formatTimeAgo(vibe.createdAt)}</p>
                       </div>
                       {vibe.category === 'trending' && (
@@ -387,15 +637,9 @@ const CommunityPage = () => {
                         }
                         
                         // Extract user ID in all possible formats
-                        // The backend returns userId as a populated user object, so we check vibe.userId._id
-                        // But also support the original vibe.author._id if available
-                        const currentUserId = String(user._id || user.id || user.userId || '');
-                        const postAuthorId = String(
-                          (vibe.userId && (vibe.userId._id || vibe.userId.id)) || 
-                          (vibe.author && (vibe.author._id || vibe.author.id)) || 
-                          vibe.userId || 
-                          ''
-                        );
+                        // The backend returns userId as a populated user object with _id field
+                        const currentUserId = String(user._id || user.id || '');
+                        const postAuthorId = String(vibe.userId?._id || vibe.userId || '');
                         
                         // Compare the IDs after ensuring they're both strings
                         const isOwner = currentUserId === postAuthorId;
@@ -443,12 +687,13 @@ const CommunityPage = () => {
                       </div>
                     )}
                     
-                    {/* Post Actions - Likes and Comments */}
+                    {/* Post Actions - Likes, Comments, and Share */}
                     <div className="mt-4 flex items-center justify-between text-gray-400">
                       <div className="flex space-x-4">
                         <button 
                           onClick={() => toggleLike(vibe.id)}
-                          className={`flex items-center space-x-1 ${vibe.liked ? 'text-red-500' : 'hover:text-red-400'}`}
+                          className={`flex items-center space-x-1 transition-colors ${vibe.liked ? 'text-red-500' : 'hover:text-red-400'}`}
+                          title="Like this vibe"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
@@ -458,48 +703,69 @@ const CommunityPage = () => {
                         
                         <button 
                           onClick={() => toggleComments(vibe.id)}
-                          className="flex items-center space-x-1 hover:text-blue-400"
+                          className="flex items-center space-x-1 hover:text-blue-400 transition-colors"
+                          title="View comments"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9 8s9 3.582 9 8z" />
                           </svg>
-                          <span>{vibe.comments?.length || 0}</span>
+                          <span>{Array.isArray(vibe.comments) && vibe.comments.length > 0 ? vibe.comments.length : vibe.commentCount || 0}</span>
                         </button>
-                      </div>
-                      
-                      <div className="text-xs">
-                        {vibe.shares || 0} shares
+
+                        <button 
+                          onClick={() => sharePost(vibe.id, vibe.content.substring(0, 50))}
+                          className="flex items-center space-x-1 hover:text-green-400 transition-colors"
+                          title="Share this vibe"
+                        >
+                          <FaShare className="h-4 w-4" />
+                          <span>{vibe.shares || 0}</span>
+                        </button>
                       </div>
                     </div>
                     
                     {/* Comments Section */}
                     {expandedComments[vibe.id] && (
                       <div className="mt-4 pt-4 border-t border-gray-700">
+                        {loadingComments[vibe.id] ? (
+                          <div className="flex justify-center py-4">
+                            <div className="inline-block animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[#FF4D67]"></div>
+                          </div>
+                        ) : (
                         <div className="space-y-3">
-                          {(vibe.comments || []).map((comment, index) => (
-                            <div key={comment._id || index} className="flex space-x-2">
-                              {comment.author?.avatar ? (
-                                <img 
-                                  src={comment.author.avatar}
-                                  alt={comment.author.name}
-                                  className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                                />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#FF4D67] to-[#FF6B8B] flex items-center justify-center flex-shrink-0">
-                                  <span className="text-white text-xs font-medium">
-                                    {comment.author?.name ? comment.author.name.charAt(0).toUpperCase() : '?'}
-                                  </span>
+                          {(Array.isArray(vibe.comments) ? vibe.comments : []).map((comment, index) => {
+                            const userName = comment.userName || comment.author?.name || 'Anonymous';
+                            const userAvatar = comment.userAvatar || comment.author?.avatar;
+                            const commentText = comment.text || comment.content;
+                            const firstLetter = userName.charAt(0).toUpperCase();
+
+                            return (
+                              <div key={comment._id || comment.id || index} className="flex space-x-2">
+                                {userAvatar ? (
+                                  <img 
+                                    src={userAvatar}
+                                    alt={userName}
+                                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#FF4D67] to-[#FF6B8B] flex items-center justify-center flex-shrink-0">
+                                    <span className="text-white text-xs font-medium">
+                                      {firstLetter}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex-1 bg-gray-700/50 rounded-lg p-2">
+                                  <div className="flex items-center">
+                                    <span className="font-medium text-white text-sm">{userName}</span>
+                                    <span className="text-xs text-gray-400 ml-2">{formatTimeAgo(comment.createdAt)}</span>
+                                  </div>
+                                  <p className="text-gray-200 text-sm mt-1">{commentText}</p>
                                 </div>
-                              )}
-                              <div className="flex-1 bg-gray-700/50 rounded-lg p-2">
-                                <div className="flex items-center">
-                                  <span className="font-medium text-white text-sm">{comment.author?.name}</span>
-                                  <span className="text-xs text-gray-400 ml-2">{formatTimeAgo(comment.createdAt)}</span>
-                                </div>
-                                <p className="text-gray-200 text-sm mt-1">{comment.content}</p>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           
                           {/* Comment Input */}
                           <div className="flex space-x-2 mt-3">
@@ -533,6 +799,7 @@ const CommunityPage = () => {
                             </div>
                           </div>
                         </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -544,6 +811,113 @@ const CommunityPage = () => {
               <p className="text-gray-400 mb-2">No vibes here yet. Share yours and get things flowing! 🎧</p>
             </div>
           )}
+          </div>
+        </div>
+
+        {/* Recommended Artists Sidebar */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-6">
+            <div className="bg-gradient-to-b from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-5 border border-gray-700/50">
+              <h2 className="text-xl font-bold text-white mb-4">Discover Artists</h2>
+              
+              {/* Filter Buttons */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setArtistFilter('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    artistFilter === 'all'
+                      ? 'bg-[#FF4D67] text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  All ({recommendedArtists.length})
+                </button>
+                <button
+                  onClick={() => setArtistFilter('following')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    artistFilter === 'following'
+                      ? 'bg-[#FF4D67] text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Following ({Object.values(followedArtists).filter(Boolean).length})
+                </button>
+                <button
+                  onClick={() => setArtistFilter('notFollowing')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    artistFilter === 'notFollowing'
+                      ? 'bg-[#FF4D67] text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  New
+                </button>
+              </div>
+              
+              {loadingArtists ? (
+                <div className="flex justify-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#FF4D67]"></div>
+                </div>
+              ) : getFilteredArtists().length > 0 ? (
+                <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                  {getFilteredArtists().map((artist) => {
+                    const artistId = artist._id || artist.id;
+                    return (
+                      <a
+                        key={artistId}
+                        href={`/artists/${artistId}`}
+                        className="block group"
+                      >
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-700/30 hover:bg-gray-700/50 transition-colors">
+                          {artist.avatar ? (
+                            <img
+                              src={artist.avatar}
+                              alt={artist.name}
+                              className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FF4D67] to-[#FF6B8B] flex items-center justify-center flex-shrink-0">
+                              <span className="text-white font-medium text-sm">
+                                {artist.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-white text-sm truncate group-hover:text-[#FF4D67] transition-colors">
+                              {artist.name}
+                            </h3>
+                            <p className="text-xs text-gray-400">
+                              {artist.followers || 0} followers
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              toggleFollowArtist(artistId);
+                            }}
+                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${
+                              followedArtists[artistId]
+                                ? 'bg-gray-700 text-white hover:bg-gray-600'
+                                : 'bg-[#FF4D67] text-white hover:bg-[#FF6B8B]'
+                            }`}
+                          >
+                            {followedArtists[artistId] ? 'Following' : 'Follow'}
+                          </button>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-sm text-center py-8">No artists found</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -697,6 +1071,122 @@ const CommunityPage = () => {
           </div>
         </div>
       )}
+
+      {/* Mobile Artists Modal */}
+      {showArtistsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-end z-50 lg:hidden">
+          <div className="bg-gray-900 w-full rounded-t-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Discover Artists</h2>
+              <button
+                onClick={() => setShowArtistsModal(false)}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex gap-2 mb-6 overflow-x-auto">
+              <button
+                onClick={() => setArtistFilter('all')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
+                  artistFilter === 'all'
+                    ? 'bg-[#FF4D67] text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                All ({recommendedArtists.length})
+              </button>
+              <button
+                onClick={() => setArtistFilter('following')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
+                  artistFilter === 'following'
+                    ? 'bg-[#FF4D67] text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Following ({Object.values(followedArtists).filter(Boolean).length})
+              </button>
+              <button
+                onClick={() => setArtistFilter('notFollowing')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
+                  artistFilter === 'notFollowing'
+                    ? 'bg-[#FF4D67] text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                New
+              </button>
+            </div>
+
+            {loadingArtists ? (
+              <div className="flex justify-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#FF4D67]"></div>
+              </div>
+            ) : getFilteredArtists().length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {getFilteredArtists().map((artist) => {
+                  const artistId = artist._id || artist.id;
+                  return (
+                    <a
+                      key={artistId}
+                      href={`/artists/${artistId}`}
+                      onClick={() => setShowArtistsModal(false)}
+                      className="block"
+                    >
+                      <div className="flex flex-col items-center p-4 rounded-xl bg-gray-800/50 hover:bg-gray-800 transition-colors">
+                        {artist.avatar ? (
+                          <img
+                            src={artist.avatar}
+                            alt={artist.name}
+                            className="w-16 h-16 rounded-full object-cover mb-3"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#FF4D67] to-[#FF6B8B] flex items-center justify-center mb-3">
+                            <span className="text-white font-medium text-lg">
+                              {artist.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <h3 className="font-semibold text-white text-center text-sm truncate w-full mb-1">
+                          {artist.name}
+                        </h3>
+                        
+                        <p className="text-gray-400 text-xs text-center mb-3">
+                          {artist.followers || 0} followers
+                        </p>
+                        
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleFollowArtist(artistId);
+                          }}
+                          className={`w-full px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                            followedArtists[artistId]
+                              ? 'bg-gray-700 text-white hover:bg-gray-600'
+                              : 'bg-[#FF4D67] text-white hover:bg-[#FF6B8B]'
+                          }`}
+                        >
+                          {followedArtists[artistId] ? 'Following' : 'Follow'}
+                        </button>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-center py-12">No artists found</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
     </div>
   );
 };

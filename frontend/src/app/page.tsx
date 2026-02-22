@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../contexts/AuthContext";
@@ -27,14 +27,18 @@ interface Track {
   category?: string;
   type?: 'song' | 'beat' | 'mix';
   paymentType?: 'free' | 'paid';
+  price?: number;
+  currency?: string;
   creatorId?: string;
 }
 
 interface Creator {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   type: string;
-  followers: number;
+  followers?: number;
+  followersCount?: number;
   avatar: string;
   verified?: boolean;
 }
@@ -194,6 +198,8 @@ export default function Home() {
         category: track.type || 'song',
         type: (track.type as 'song' | 'beat' | 'mix') || 'song',
         paymentType: track.paymentType,
+        price: track.price,
+        currency: track.currency,
         creatorId: typeof track.creatorId === "object" && track.creatorId !== null
           ? (track.creatorId as any)._id
           : track.creatorId,
@@ -966,7 +972,8 @@ export default function Home() {
           ) : (
             forYouTracks.map((track) => {
               // Find the full track object to get additional properties
-              const fullTrack = trendingTracksData.find(t => t._id === track.id);
+              // Try to match by _id first (for regular tracks), then by id (for transformed tracks)
+              const fullTrack = trendingTracksData.find(t => t._id === track.id || t._id === (track as any)._id);
               return (
                 <TrackCard 
                   key={`for-you-${track.id}`} 
@@ -1543,8 +1550,7 @@ export default function Home() {
           {activeTab === "new" && (
             <div className="grid grid-cols-[repeat(auto-fill,_minmax(250px,_1fr))] gap-4 sm:gap-6 md:gap-6">
               {newTracks.map((track) => (
-                <><div
-                  key={`new-releases-tab-${track.id}`}
+                <Fragment key={`new-releases-tab-${track.id}`}><div
                   className="group card-bg rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#FF4D67]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FF4D67]/10"
                 >
                   <div className="relative">
@@ -1705,7 +1711,7 @@ export default function Home() {
                         <span>{track.likes}</span>
                       </div>
                     </div>
-                  </div></>
+                  </div></Fragment>
               ))}
             </div>
           )}
@@ -1715,9 +1721,9 @@ export default function Home() {
             <div className="grid grid-cols-[repeat(auto-fill,_minmax(250px,_1fr))] gap-4 sm:gap-6 md:gap-6">
               {popularCreators.map((creator) => (
                 <div
-                  key={creator.id}
+                  key={creator._id || creator.id}
                   className="group card-bg rounded-2xl p-4 sm:p-6 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 cursor-pointer"
-                  onClick={() => router.push(`/artists/${creator.id}`)}
+                  onClick={() => router.push(`/artists/${creator._id || creator.id}`)}
                 >
                   <div className="flex items-center gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-5">
                     <div className="relative">
@@ -1751,39 +1757,38 @@ export default function Home() {
 
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500 text-xs sm:text-sm">
-                      {creator.followers.toLocaleString()} followers
+                      {(creator.followers || creator.followersCount || 0).toLocaleString()} followers
                     </span>
                     <button 
-                      className={`px-3 py-1.5 sm:px-4 sm:py-2 ${followStatus[creator.id] ? 'bg-gray-600 hover:bg-gray-700 border-gray-600' : 'bg-transparent border border-[#FFCB2B] text-[#FFCB2B] hover:bg-[#FFCB2B]/10'} rounded-full text-xs sm:text-sm font-medium transition-colors`}
+                      className={`px-3 py-1.5 sm:px-4 sm:py-2 ${followStatus[creator._id || creator.id || ''] ? 'bg-gray-600 hover:bg-gray-700 border-gray-600' : 'bg-transparent border border-[#FFCB2B] text-[#FFCB2B] hover:bg-[#FFCB2B]/10'} rounded-full text-xs sm:text-sm font-medium transition-colors`}
                       onClick={async (e) => {
                         e.stopPropagation();
+                        const creatorId = creator._id || creator.id;
+                        if (!creatorId) {
+                          alert('Creator ID not found');
+                          return;
+                        }
                         if (!isAuthenticated) {
                           router.push('/login');
                         } else {
                           try {
-                            if (followStatus[creator.id]) {
-                              // Unfollow the creator
-                              await unfollowCreator(creator.id);
+                            if (followStatus[creatorId]) {
+                              await unfollowCreator(creatorId);
                               
-                              // Update the followers count in the UI
                               setFollowStatus(prev => ({
                                 ...prev,
-                                [creator.id]: false
+                                [creatorId]: false
                               }));
                               
-                              // Show success feedback
                               console.log('Successfully unfollowed creator');
                             } else {
-                              // Follow the creator
-                              await followCreator(creator.id);
+                              await followCreator(creatorId);
                               
-                              // Update the follow status
                               setFollowStatus(prev => ({
                                 ...prev,
-                                [creator.id]: true
+                                [creatorId]: true
                               }));
                               
-                              // Show success feedback
                               console.log('Successfully followed creator');
                             }
                           } catch (error) {
@@ -1793,7 +1798,7 @@ export default function Home() {
                         }
                       }}
                     >
-                      {followStatus[creator.id] ? 'Unfollow' : 'Follow'}
+                      {followStatus[creator._id || creator.id || ''] ? 'Unfollow' : 'Follow'}
                     </button>
                   </div>
                 </div>
@@ -1996,9 +2001,16 @@ export default function Home() {
                               // Handle missing or null paymentType by defaulting to 'free'
                               const paymentType = transformedTrack.paymentType || 'free';
                               return (
-                                <span className={`inline-block px-2 py-1 text-xs rounded-full ${paymentType === 'paid' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}>
-                                  {paymentType === 'paid' ? 'PAID BEAT' : 'FREE BEAT'}
-                                </span>
+                                <>
+                                  <span className={`inline-block px-2 py-1 text-xs rounded-full ${paymentType === 'paid' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}>
+                                    {paymentType === 'paid' ? 'PAID BEAT' : 'FREE BEAT'}
+                                  </span>
+                                  {paymentType === 'paid' && transformedTrack.price && (
+                                    <span className="ml-2 inline-block px-2 py-1 text-xs rounded-full bg-yellow-600 text-white">
+                                      {transformedTrack.price.toLocaleString()} RWF
+                                    </span>
+                                  )}
+                                </>
                               );
                             })()}
                           </div>

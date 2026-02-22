@@ -62,6 +62,9 @@ const paymentRoutes = require('./routes/paymentRoutes');
 // Import withdrawal routes
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
 
+// Import contact message routes
+const contactMessageRoutes = require('./routes/contactMessageRoutes');
+
 // Load env vars
 dotenv.config();
 
@@ -174,6 +177,11 @@ console.log('About to register public routes...');
 console.log('Public routes object:', publicRoutes);
 app.use('/api/public', publicRoutes);
 console.log('Public routes registered');
+
+// Register public user routes (merge with public routes)
+const publicUserRoutes = require('./routes/publicUserRoutes');
+app.use('/api/public', publicUserRoutes);
+console.log('Public user routes registered');
 
 // Register public playlist routes
 app.use('/api/public/playlists', publicPlaylistRoutes);
@@ -306,10 +314,9 @@ console.log('Payment routes registered');
 app.use('/api/withdrawals', withdrawalRoutes);
 console.log('Withdrawal routes registered');
 
-// Register public user routes for chat functionality
-const publicUserRoutes = require('./routes/publicUserRoutes');
-app.use('/api/public', publicUserRoutes);
-console.log('Public user routes registered');
+// Register contact message routes
+app.use('/api/contact-messages', contactMessageRoutes);
+console.log('Contact message routes registered');
 
 // Directly implement profile update route in app.js to avoid 404 issues
 // User route for updating own profile directly in app

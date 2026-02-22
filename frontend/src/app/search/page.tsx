@@ -43,10 +43,12 @@ interface PlayerTrack {
 }
 
 interface Creator {
-  id: string
+  _id?: string
+  id?: string
   name: string
   type: string
-  followers: number
+  followers?: number
+  followersCount?: number
   avatar: string
   verified?: boolean
 }
@@ -485,7 +487,7 @@ function SearchResultsContent() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {artists.length > 0 ? (
                     artists.map((artist) => (
-                      <Link key={artist.id} href={`/artists/${artist.id}`} className="group card-bg rounded-xl p-4 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 block">
+                      <Link key={artist._id || artist.id} href={`/artists/${artist._id || artist.id}`} className="group card-bg rounded-xl p-4 transition-all duration-300 hover:border-[#FFCB2B]/50 hover:bg-gradient-to-br hover:from-gray-900/70 hover:to-gray-900/50 hover:shadow-xl hover:shadow-[#FFCB2B]/10 block">
                         <div className="flex flex-col items-center text-center">
                           <div className="relative mb-3">
                             <img 
@@ -509,18 +511,18 @@ function SearchResultsContent() {
                           <button 
                             onClick={(e) => {
                               e.preventDefault();
-                              handleFollowArtist(artist.id);
+                              handleFollowArtist(artist._id || artist.id || '');
                             }}
                             disabled={!isAuthenticated}
                             className={`mt-2 w-full px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                              following[artist.id] 
+                              following[artist._id || artist.id || ''] 
                                 ? 'bg-[#FF4D67] text-white' 
                                 : isAuthenticated
                                   ? 'bg-transparent border border-[#FFCB2B] text-[#FFCB2B] hover:bg-[#FFCB2B]/10'
                                   : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                             }`}
                           >
-                            {following[artist.id] 
+                            {following[artist._id || artist.id || ''] 
                               ? 'Following' 
                               : isAuthenticated 
                                 ? 'Follow' 

@@ -8,12 +8,14 @@ const PWAInstallPrompt = () => {
 
   useEffect(() => {
     const handler = (e: Event) => {
+      const beforeInstallPromptEvent = e as any;
       // Prevent the mini-infobar from appearing on mobile
-      e.preventDefault();
+      beforeInstallPromptEvent.preventDefault();
       // Stash the event so it can be triggered later
-      setDeferredPrompt(e);
+      setDeferredPrompt(beforeInstallPromptEvent);
       // Show the install prompt
       setShowInstallPrompt(true);
+      console.log('PWA install prompt available');
     };
 
     window.addEventListener('beforeinstallprompt', handler as any);
@@ -24,24 +26,31 @@ const PWAInstallPrompt = () => {
   }, []);
 
   const installApp = () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      console.warn('Install prompt is not available');
+      return;
+    }
 
-    // Show the install prompt
-    deferredPrompt.prompt();
+    try {
+      // Show the install prompt
+      deferredPrompt.prompt();
 
-    // Wait for the user to respond to the prompt
-    deferredPrompt.userChoice.then((choiceResult: any) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      } else {
-        console.log('User dismissed the install prompt');
-      }
+      // Wait for the user to respond to the prompt
+      deferredPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        } else {
+          console.log('User dismissed the install prompt');
+        }
 
-      // Clear the deferred prompt
-      setDeferredPrompt(null);
-      // Hide the install prompt
-      setShowInstallPrompt(false);
-    });
+        // Clear the deferred prompt
+        setDeferredPrompt(null);
+        // Hide the install prompt
+        setShowInstallPrompt(false);
+      });
+    } catch (error) {
+      console.error('Error showing install prompt:', error);
+    }
   };
 
   const closePrompt = () => {
