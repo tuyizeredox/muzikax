@@ -30,7 +30,11 @@ export default function AdminMessages() {
   const [filterType, setFilterType] = useState('all');
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
-  const [stats, setStats] = useState({ total: 0, byStatus: [], byType: [] });
+  const [stats, setStats] = useState<{
+    total: number;
+    byStatus: Array<{ _id: string; count: number }>;
+    byType: Array<{ _id: string; count: number }>;
+  }>({ total: 0, byStatus: [], byType: [] });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -207,13 +211,13 @@ export default function AdminMessages() {
             <div className="bg-gray-800 rounded-lg p-4">
               <p className="text-gray-400 text-sm">Unread</p>
               <p className="text-2xl font-bold text-yellow-500">
-                {stats.byStatus?.find((s: any) => s._id === 'new')?.count || 0}
+                {stats.byStatus?.find((s) => s._id === 'new')?.count || 0}
               </p>
             </div>
             <div className="bg-gray-800 rounded-lg p-4">
               <p className="text-gray-400 text-sm">Replied</p>
               <p className="text-2xl font-bold text-blue-500">
-                {stats.byStatus?.find((s: any) => s._id === 'replied')?.count || 0}
+                {stats.byStatus?.find((s) => s._id === 'replied')?.count || 0}
               </p>
             </div>
           </div>
