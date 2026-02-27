@@ -506,7 +506,7 @@ function SearchResultsContent() {
                           <h3 className="font-bold text-white text-sm sm:text-base truncate w-full">{artist.name}</h3>
                           <p className="text-[#FFCB2B] text-xs sm:text-sm mb-2">{artist.type}</p>
                           <p className="text-gray-500 text-xs">
-                            {artist.followers.toLocaleString()} followers
+                            {(artist.followers || 0).toLocaleString()} followers
                           </p>
                           <button 
                             onClick={(e) => {
